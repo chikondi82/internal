@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Vialifecoach Internal — Secure team workspace for Vialifecoach Global Foundation. Sign in to collaborate via channels, direct messages, and the company feed."/>
+  <meta name="keywords" content="Vialifecoach, Vialifecoach Global Foundation, internal, team workspace, chat, company feed"/>
+  <meta name="robots" content="index,follow"/>
+  <meta name="author" content="Vialifecoach Global Foundation"/>
+  <title>Vialifecoach Internal - Sign In | Vialifecoach Global Foundation</title>
+
+  <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+  <link rel="apple-touch-icon" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+
+  <meta property="og:type" content="website"/>
+  <meta property="og:title" content="Vialifecoach Internal - Team Workspace"/>
+  <meta property="og:description" content="Secure internal workspace for Vialifecoach Global Foundation team members."/>
+  <meta property="og:image" content="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+  <meta property="og:site_name" content="Vialifecoach Internal"/>
+
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Vialifecoach Internal - Team Workspace"/>
+  <meta name="twitter:description" content="Secure internal workspace for Vialifecoach Global Foundation team members."/>
+  <meta name="twitter:image" content="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+</head>
+<body>
+
+  <div id="toast"></div>
+
+  <div id="auth-screen">
+    <div class="card">
+      <div class="logo">
+        <img src="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" alt="Vialifecoach Global Foundation" style="width:92px;height:92px;border-radius:20px;object-fit:cover;box-shadow:0 6px 20px rgba(201,168,76,0.35);"/>
+      </div>
+      <h1>Vialifecoach Internal</h1>
+      <p class="sub">Sign in to Vialifecoach Internal</p>
+      <div class="tabs">
+        <button class="tab on" id="tl" onclick="switchTab('login')">Sign In</button>
+        <button class="tab" id="ts" onclick="switchTab('signup')">Create Account</button>
+      </div>
+      <div id="nf" style="display:none">
+        <label class="lbl">Full Name</label>
+        <input class="inp" id="iname" type="text" placeholder="Jane Doe"/>
+        <div class="errtxt" id="ename"></div>
+      </div>
+      <label class="lbl">Email Address</label>
+      <input class="inp" id="iemail" type="email" placeholder="you@company.com"/>
+      <div class="errtxt" id="eemail"></div>
+      <label class="lbl">Password</label>
+      <div class="pw-wrap">
+        <input class="inp" id="ipass" type="password" placeholder="Enter your password"/>
+        <button class="eye" onclick="togglePass(this)">&#128065;</button>
+      </div>
+      <div class="errtxt" id="epass"></div>
+      <div class="forgot" id="fw"><span onclick="forgotPw()">Forgot password?</span></div>
+      <button class="btn" id="sbtn" onclick="doAuth()">Sign In &rarr;</button>
+      <div class="or"><div class="or-line"></div><span class="or-txt">or</span><div class="or-line"></div></div>
+      <button class="gbtn" onclick="doGoogle()">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continue with Google
+      </button>
+      <p class="footer">By continuing you agree to our <span>Terms</span> &amp; <span>Privacy Policy</span></p>
+    </div>
+  </div>
+
+  <script src="firebase-init.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>

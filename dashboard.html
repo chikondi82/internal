@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Vialifecoach Internal Workspace — Team chat, channels, direct messages and company feed for Vialifecoach Global Foundation staff."/>
+  <meta name="keywords" content="Vialifecoach, Vialifecoach Global Foundation, internal workspace, team chat, company feed"/>
+  <meta name="robots" content="index,follow"/>
+  <meta name="author" content="Vialifecoach Global Foundation"/>
+  <title>Vialifecoach Internal - Workspace | Vialifecoach Global Foundation</title>
+
+  <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+  <link rel="apple-touch-icon" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+
+  <meta property="og:type" content="website"/>
+  <meta property="og:title" content="Vialifecoach Internal - Workspace"/>
+  <meta property="og:description" content="Team chat and collaboration workspace for Vialifecoach Global Foundation."/>
+  <meta property="og:image" content="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+  <meta property="og:site_name" content="Vialifecoach Internal"/>
+
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Vialifecoach Internal - Workspace"/>
+  <meta name="twitter:description" content="Team chat and collaboration workspace for Vialifecoach Global Foundation."/>
+  <meta name="twitter:image" content="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+</head>
+<body>
+
+  <div id="toast"></div>
+
+  <div id="modal" class="modal-mask" style="display:none">
+    <div class="modal-card">
+      <div class="modal-hdr">
+        <span class="modal-title">Create a channel</span>
+        <button class="ibtn" onclick="closeModal()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">Channels are where your team communicates. They're best when organized around a topic — #random, for example.</p>
+        <label class="lbl" style="margin-top:18px;color:#8b949e">Name</label>
+        <div class="prefix-inp">
+          <span style="color:#8b949e">#</span>
+          <input class="inp" id="mcn" type="text" placeholder="e.g. random" maxlength="40" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9\-]/g,'').replace(/\s+/g,'-')"/>
+        </div>
+        <div class="errtxt" id="emcn"></div>
+        <label class="lbl" style="color:#8b949e">Description <span style="color:#6e7681;font-weight:500">(optional)</span></label>
+        <input class="inp" id="mcd" type="text" placeholder="What's this channel about?">
+        <button class="btn" id="mbtn" onclick="createChannel()" style="margin-top:10px">Create Channel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dash">
+    <div class="sidebar">
+      <div class="wk-hdr">
+        <div class="wk-row">
+          <img src="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" alt="Vialifecoach Global Foundation" style="width:38px;height:38px;border-radius:12px;object-fit:cover;box-shadow:0 3px 10px rgba(201,168,76,0.3);flex-shrink:0"/>
+          <div style="flex:1;min-width:0;margin-left:10px">
+            <div class="wk-name">Vialifecoach</div>
+            <div class="wk-plan"><span class="dot"></span> Workspace</div>
+          </div>
+          <button class="ibtn" onclick="doLogout()" title="Sign Out">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="s-search">
+        <div class="s-sb">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input placeholder="Search messages, people, channels..." id="sinp" oninput="onSearch()"/>
+        </div>
+      </div>
+
+      <div class="scroller">
+        <div class="sect">
+          <div class="sect-hdr">
+            <span class="chev">▾</span>
+            <span class="sect-title">Workspace</span>
+          </div>
+          <div class="sect-body">
+            <div class="row on" onclick="window.location.href='dashboard.html'">
+              <span class="hash" style="display:flex;align-items:center;justify-content:center">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+              </span>
+              <span class="rname">Workspace Chat</span>
+            </div>
+            <div class="row" onclick="window.location.href='feed.html'">
+              <span class="hash" style="display:flex;align-items:center;justify-content:center">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+              </span>
+              <span class="rname">Company Feed</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sect">
+          <div class="sect-hdr" onclick="toggleSect('ch')">
+            <span class="chev" id="chev-ch">▾</span>
+            <span class="sect-title">Channels</span>
+            <button class="add-btn" onclick="openModal()" title="Create channel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+          <div class="sect-body" id="chlist"></div>
+        </div>
+
+        <div class="sect">
+          <div class="sect-hdr" onclick="toggleSect('dm')">
+            <span class="chev" id="chev-dm">▾</span>
+            <span class="sect-title">Direct Messages</span>
+          </div>
+          <div class="sect-body" id="dmlist"></div>
+        </div>
+
+        <div class="me-footer">
+          <div class="me-card" id="dash-mecard" title="Click to edit your profile" style="cursor:pointer;padding:14px 12px 16px">
+            <div class="av me-av" id="uav" style="width:40px;height:40px;font-size:14px;background:linear-gradient(135deg,#25D366,#075e54);pointer-events:none">?</div>
+            <div style="flex:1;min-width:0;pointer-events:none">
+              <div class="s-name" id="uname">User</div>
+              <div class="s-stat" style="pointer-events:none"><span class="dot"></span> <span style="cursor:pointer;pointer-events:auto" class="me-edit-btn" id="dash-edit-btn">Active · Tap to edit profile ✎</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-area">
+      <div class="no-chat" id="nc">
+        <div class="empty-card">
+          <div class="empty-emoji">💬</div>
+          <h2>Welcome to Vialifecoach Workspace</h2>
+          <p>Pick a channel from the sidebar to start collaborating, or message a teammate directly.</p>
+          <div class="empty-tips">
+            <div class="tip" onclick="openChannel('general','general','Company-wide announcements')" style="cursor:pointer" title="Open #general"><b>#general</b> — Company-wide announcements</div>
+            <div class="tip" onclick="openChannel('random','random','Non-work banter &amp; memes')" style="cursor:pointer" title="Open #random"><b>#random</b> — Non-work banter &amp; memes</div>
+            <div class="tip" onclick="scrollToDM()" style="cursor:pointer" title="Open Direct Messages list"><b>Direct Messages</b> — Private 1-on-1 chats</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ac" style="display:none;flex-direction:column;flex:1;min-height:0">
+        <div class="c-hdr">
+          <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+            <div class="ch-icon" id="chav">#</div>
+            <div style="flex:1;min-width:0">
+              <div class="c-hname" id="chname"></div>
+              <div class="c-hstat" id="chstat">&#9679; Online</div>
+            </div>
+          </div>
+          <div id="ch-topic" class="ch-topic"></div>
+          <button class="ibtn aipill" onclick="getAI()">&#129302; AI Reply</button>
+        </div>
+
+        <div class="msgs-wrap">
+          <div class="msgs" id="msgs"></div>
+        </div>
+        <div class="typing" id="typing">&#129302; AI is typing...</div>
+        <div class="composer">
+          <div class="cmp-box">
+            <div class="cmp-bar">
+              <span class="cmp-hint" id="cmp-hint">Message #general</span>
+              <div class="cmp-tools">
+                <span class="ttip" title="Bold"><b>B</b></span>
+                <span class="ttip" title="Italic"><i>I</i></span>
+                <span class="ttip" title="Code">&lt;/&gt;</span>
+                <span class="ttip" title="List">≡</span>
+              </div>
+            </div>
+            <textarea class="cmp-inp" id="minp" placeholder="" oninput="updSend()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"></textarea>
+            <div class="cmp-ftr">
+              <span class="cmp-short"><b>Enter</b> to send · <b>Shift+Enter</b> for new line</span>
+              <button class="sbtn off" id="sndbtn" onclick="sendMsg()">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="firebase-init.js"></script>
+  <script src="chat.js"></script>
+</body>
+</html>

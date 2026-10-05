@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Vialifecoach Internal Company Feed — Share wins, progress updates, shoutouts, ideas, and announcements with the Vialifecoach Global Foundation team."/>
+  <meta name="keywords" content="Vialifecoach, Vialifecoach Global Foundation, company feed, internal announcements, team wins"/>
+  <meta name="robots" content="index,follow"/>
+  <meta name="author" content="Vialifecoach Global Foundation"/>
+  <title>Vialifecoach Internal - Company Feed | Vialifecoach Global Foundation</title>
+
+  <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+  <link rel="apple-touch-icon" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+
+  <meta property="og:type" content="website"/>
+  <meta property="og:title" content="Vialifecoach Internal - Company Feed"/>
+  <meta property="og:description" content="Company feed for sharing wins, progress, and announcements inside Vialifecoach Global Foundation."/>
+  <meta property="og:image" content="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+  <meta property="og:site_name" content="Vialifecoach Internal"/>
+
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Vialifecoach Internal - Company Feed"/>
+  <meta name="twitter:description" content="Company feed for sharing wins, progress, and announcements inside Vialifecoach Global Foundation."/>
+  <meta name="twitter:image" content="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
+
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+</head>
+<body>
+
+  <div id="toast"></div>
+
+  <div id="dash">
+    <div class="sidebar">
+      <div class="wk-hdr">
+        <div class="wk-row" style="cursor:pointer" onclick="go('dashboard.html')">
+          <img src="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" alt="Vialifecoach Global Foundation" style="width:38px;height:38px;border-radius:12px;object-fit:cover;box-shadow:0 3px 10px rgba(201,168,76,0.3);flex-shrink:0"/>
+          <div style="flex:1;min-width:0;margin-left:10px">
+            <div class="wk-name">Vialifecoach</div>
+            <div class="wk-plan"><span class="dot"></span> Workspace</div>
+          </div>
+          <button class="ibtn" onclick="doLogout(event)" title="Sign Out">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="s-search">
+        <div class="s-sb">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input placeholder="Search posts..." id="sinp" oninput="renderFeed()"/>
+        </div>
+      </div>
+
+      <div class="scroller">
+        <div class="sect">
+          <div class="sect-hdr">
+            <span class="chev">▾</span>
+            <span class="sect-title">Workspace</span>
+          </div>
+          <div class="sect-body">
+            <div class="row" onclick="go('dashboard.html')">
+              <span class="hash" style="display:flex;align-items:center;justify-content:center">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+              </span>
+              <span class="rname">Workspace Chat</span>
+            </div>
+            <div class="row on" onclick="go('feed.html')">
+              <span class="hash" style="display:flex;align-items:center;justify-content:center">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+              </span>
+              <span class="rname">Company Feed</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sect">
+          <div class="sect-hdr">
+            <span class="chev">▾</span>
+            <span class="sect-title">Quick Stats</span>
+          </div>
+          <div class="sect-body" id="qstats" style="padding:4px 8px 8px">
+            <div class="stat-card">
+              <div class="stat-num" id="pcount">—</div>
+              <div class="stat-lbl">Posts shared</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="lcount">—</div>
+              <div class="stat-lbl">Claps given</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="mcount">—</div>
+              <div class="stat-lbl">Team members</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="me-footer">
+          <div class="me-card" id="feed-mecard" title="Click to edit your profile" style="cursor:pointer;padding:14px 12px 16px">
+            <div class="av me-av" id="uav" style="width:40px;height:40px;font-size:14px;background:linear-gradient(135deg,#25D366,#075e54);pointer-events:none">?</div>
+            <div style="flex:1;min-width:0;margin-left:10px;pointer-events:none">
+              <div class="s-name" id="uname">User</div>
+              <div class="s-stat" style="pointer-events:none"><span class="dot"></span> <span style="cursor:pointer;pointer-events:auto" class="me-edit-btn" id="feed-edit-btn">Active · Tap to edit profile ✎</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-area feed-area">
+      <div class="feed-top">
+        <div class="feed-hero">
+          <div class="feed-h1">
+            <span class="hero-emoji">🎉</span>
+            <h1>Company Feed</h1>
+          </div>
+          <p class="feed-sub">Share wins, milestones, and progress with the whole team. Celebrate each other's success.</p>
+        </div>
+      </div>
+
+      <div class="feed-scroll">
+        <div class="feed-wrap">
+
+          <div class="composer-card post-cmp" style="position:relative">
+            <div class="pch-row">
+              <div class="av pch-av" id="pcav" style="width:44px;height:44px;font-size:15px;background:linear-gradient(135deg,#25D366,#075e54)">?</div>
+              <div style="flex:1;min-width:0">
+                <textarea id="ptext" class="pc-inp" rows="3" placeholder="Share a win, progress, milestone, or shoutout... Type @ to mention a teammate."></textarea>
+                <div id="pm-prev" style="display:none;margin:6px 0 10px;padding:10px;border:1px dashed rgba(255,255,255,0.2);border-radius:12px;background:rgba(255,255,255,0.04)">
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                    <span style="font-size:12px;color:#d1d5db">📎 Media attached</span>
+                    <button type="button" style="margin-left:auto;padding:4px 10px;font-size:11px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:#fff;cursor:pointer" onclick="clearMedia()">Remove</button>
+                  </div>
+                  <div id="pm-prev-body" style="max-height:220px;overflow:auto"></div>
+                </div>
+                <div class="pc-row">
+                  <div class="pc-tools">
+                    <button type="button" class="ttip" title="Upload image / video from phone or laptop" onclick="document.getElementById('pm-file').click()">🖼️📎</button>
+                    <button type="button" class="ttip" title="Native emoji picker" onclick="insertNativeEmoji('ptext')">😊✨</button>
+                    <button type="button" class="ttip" title="Mention someone (@user)" onclick="toolbarMention()">@</button>
+                    <button type="button" class="ttip" title="Tag / Hashtag" onclick="toolbarHashtag()">#️⃣</button>
+                  </div>
+                  <input type="file" id="pm-file" style="display:none" accept="image/*,video/*" capture="environment" multiple />
+                  <div id="mention-dd" style="display:none;position:absolute;left:0;right:0;bottom:60px;z-index:30;background:#0d1117;border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.5);max-height:220px;overflow:auto"></div>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <select id="ptag" class="tag-sel">
+                      <option value="progress">📈 Progress Update</option>
+                      <option value="win">🏆 Win / Milestone</option>
+                      <option value="shoutout">💚 Shoutout</option>
+                      <option value="idea">💡 Idea / Proposal</option>
+                      <option value="question">❓ Question</option>
+                      <option value="announcement">📢 Announcement</option>
+                    </select>
+                    <button id="psend" class="pub-btn" onclick="publishPost()">Post</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="feed" class="feed-list"></div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="firebase-init.js"></script>
+  <script src="feed.js"></script>
+</body>
+</html>
