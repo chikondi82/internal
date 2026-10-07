@@ -1,6 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSuperAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'chikondigahimbare@gmail.com';
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && (isSuperAdmin()
+            || (exists(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid))
+                && get(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true));
+    }
+
+    function canReadInternReport(report) {
+      return request.auth != null
+        && (isAdmin()
+            || report.authorUid == request.auth.uid
+            || report.currentReviewerUid == request.auth.uid
+            || request.auth.uid in report.reviewerUids);
+    }
+
+    function canAccessChannel(channelId) {
+      let channel = get(/databases/$(database)/documents/channels/$(channelId)).data;
+      return request.auth != null
+        && (isAdmin()
+            || channelId in ['general', 'random', 'announcements']
+            || channel.createdBy == request.auth.uid
+            || channel.get('visibility', 'public') != 'private'
+            || exists(/databases/$(database)/documents/channels/$(channelId)/members/$(request.auth.uid)));
+    }
+
+    function canAccessSubgroup(channelId, subgroupId) {
+      return request.auth != null
+        && (isAdmin()
+            || (canAccessChannel(channelId)
+                && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
+                && exists(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(subgroupId))
+                && exists(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid))
+                && get(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid)).data.subgroupId == subgroupId));
+    }
+
 
     match /users/{userId} {
       allow read: if request.auth != null;
@@ -34,25 +74,185 @@ service cloud.firestore {
       allow read, create, delete: if request.auth != null;
     }
 
+    match /workspaceAdmins/{userId} {
+      allow read: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId);
+      allow create, update: if isSuperAdmin()
+        && request.resource.data.uid == userId
+        && request.resource.data.enabled is bool;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /workspaceConfig/{configId} {
+      allow read: if request.auth != null;
+      allow create, update: if isSuperAdmin()
+        && configId == 'founder'
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSuperAdmin() && configId == 'founder';
+    }
+
+    match /orgGroups/{groupId} {
+      allow read: if request.auth != null;
+      allow create: if isAdmin()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0;
+      allow update, delete: if isAdmin();
+    }
+
+    match /orgAssignments/{userId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == userId
+            || isAdmin()
+            || resource.data.supervisorUid == request.auth.uid);
+      allow create, update: if isAdmin()
+        && request.resource.data.uid == userId
+        && request.resource.data.groupId is string
+        && exists(/databases/$(database)/documents/orgGroups/$(request.resource.data.groupId))
+        && request.resource.data.supervisorUid is string
+        && request.resource.data.supervisorUid != userId;
+      allow delete: if isAdmin();
+    }
+
+    match /internReports/{reportId} {
+      allow read: if canReadInternReport(resource.data);
+      allow create: if request.auth != null
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.title is string
+        && request.resource.data.summary is string
+        && request.resource.data.attachments is list
+        && request.resource.data.attachments.size() <= 5
+        && exists(/databases/$(database)/documents/orgAssignments/$(request.auth.uid))
+        && request.resource.data.groupId == get(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)).data.groupId
+        && (request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)).data.supervisorUid
+            || request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/workspaceConfig/founder).data.uid)
+        && request.resource.data.reviewerUids == [request.resource.data.currentReviewerUid];
+      allow update: if isSuperAdmin()
+        || (request.auth != null
+            && resource.data.currentReviewerUid == request.auth.uid
+            && request.resource.data.authorUid == resource.data.authorUid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentReviewerUid', 'reviewerUids', 'updatedAt'])
+            && request.resource.data.status in ['reviewed', 'forwarded']
+            && ((request.resource.data.status == 'reviewed'
+                 && request.resource.data.currentReviewerUid == null
+                 && request.resource.data.reviewerUids == resource.data.reviewerUids)
+                || (request.resource.data.status == 'forwarded'
+                    && request.resource.data.reviewerUids.size() == resource.data.reviewerUids.size() + 1
+                    && request.resource.data.reviewerUids.hasAll(resource.data.reviewerUids)
+                    && request.resource.data.reviewerUids[resource.data.reviewerUids.size()] == request.resource.data.currentReviewerUid
+                    && ((exists(/databases/$(database)/documents/orgAssignments/$(request.auth.uid))
+                         && request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)).data.supervisorUid)
+                        || request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/workspaceConfig/founder).data.uid))));
+      allow delete: if isSuperAdmin();
+      match /reviews/{reviewId} {
+        allow read: if canReadInternReport(get(/databases/$(database)/documents/internReports/$(reportId)).data);
+        allow create: if request.auth != null
+          && get(/databases/$(database)/documents/internReports/$(reportId)).data.currentReviewerUid == request.auth.uid
+          && request.resource.data.reviewerUid == request.auth.uid
+          && request.resource.data.action in ['reviewed', 'forwarded'];
+        allow update, delete: if isSuperAdmin();
+      }
+    }
+
     match /channels/{channelId} {
-      allow read, create, delete: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create: if isAdmin()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.visibility in ['public', 'private']
+        && (!(channelId in ['general', 'random', 'announcements'])
+            || request.resource.data.visibility == 'public');
+      allow update: if isAdmin()
+        && (!(channelId in ['general', 'random', 'announcements'])
+            || request.resource.data.visibility == 'public');
+      allow delete: if isAdmin()
+          && !(channelId in ['general', 'random', 'announcements'])
+        || (request.auth != null
+            && !(channelId in ['general', 'random', 'announcements'])
+            && resource.data.createdBy == request.auth.uid);
+      match /members/{userId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create: if isAdmin() && request.resource.data.uid == userId;
+        allow delete: if isAdmin();
+      }
+      match /requests/{userId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create: if request.auth != null
+          && request.auth.uid == userId
+          && !(channelId in ['general', 'random', 'announcements'])
+          && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
+          && !exists(/databases/$(database)/documents/channels/$(channelId)/members/$(userId));
+        allow delete: if isAdmin();
+      }
+      match /subgroups/{subgroupId} {
+        allow read: if canAccessChannel(channelId);
+        allow create: if isAdmin()
+          && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
+          && request.resource.data.name is string
+          && request.resource.data.visibility in ['public', 'private']
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isAdmin()
+          && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 40
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 140
+          && request.resource.data.visibility in ['public', 'private']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'description', 'visibility']);
+        match /requests/{userId} {
+          allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+          allow create: if request.auth != null
+            && request.auth.uid == userId
+            && canAccessChannel(channelId)
+            && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
+            && get(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(subgroupId)).data.get('visibility', 'public') == 'private'
+            && request.resource.data.uid == userId;
+          allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        }
+        match /messages/{msgId} {
+          allow read, create: if canAccessSubgroup(channelId, subgroupId);
+          allow delete: if canAccessSubgroup(channelId, subgroupId)
+            && (request.auth.uid == resource.data.senderUid || isAdmin());
+        }
+      }
+      match /subgroupAssignments/{userId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow create, update: if request.auth != null
+          && (request.auth.uid == userId || isAdmin())
+          && canAccessChannel(channelId)
+          && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
+          && request.resource.data.uid == userId
+          && request.resource.data.subgroupId is string
+          && exists(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(request.resource.data.subgroupId))
+          && (isAdmin()
+              || get(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(request.resource.data.subgroupId)).data.get('visibility', 'public') == 'public');
+        allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      }
     }
     match /channels/{channelId}/messages/{msgId} {
-      allow read, create: if request.auth != null;
-      allow delete: if request.auth != null
-        && (request.auth.uid == resource.data.senderUid
-            || request.auth.token.email == 'chikondigahimbare@gmail.com');
+      allow read, create: if canAccessChannel(channelId);
+      allow delete: if canAccessChannel(channelId)
+        && (request.auth.uid == resource.data.senderUid || isAdmin());
     }
 
     match /posts/{postId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
-        && request.resource.data.authorUid == request.auth.uid;
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.get('authorEmail', request.auth.token.email) == request.auth.token.email;
       allow update: if request.auth != null
-        && (request.auth.uid == resource.data.authorUid
+        && ((request.auth.uid == resource.data.authorUid
+             && request.resource.data.authorUid == resource.data.authorUid
+             && request.resource.data.get('authorEmail', '') == resource.data.get('authorEmail', ''))
+            || (resource.data.get('authorUid', '') == ''
+                && request.auth.token.email != null
+                && request.auth.token.email == resource.data.get('authorEmail', '')
+                && request.resource.data.get('authorUid', '') == '')
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
       allow delete: if request.auth != null
         && (request.auth.uid == resource.data.authorUid
+            || (resource.data.get('authorUid', '') == ''
+                && request.auth.token.email != null
+                && request.auth.token.email == resource.data.get('authorEmail', ''))
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
     }
     match /posts/{postId}/comments/{commentId} {
@@ -60,6 +260,10 @@ service cloud.firestore {
       allow delete: if request.auth != null
         && (request.auth.uid == resource.data.authorUid
             || request.auth.uid == resource.data.postAuthorUid
+            || request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.get('authorUid', '')
+            || (get(/databases/$(database)/documents/posts/$(postId)).data.get('authorUid', '') == ''
+                && request.auth.token.email != null
+                && request.auth.token.email == get(/databases/$(database)/documents/posts/$(postId)).data.get('authorEmail', ''))
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
     }
 

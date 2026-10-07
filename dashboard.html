@@ -49,13 +49,22 @@
         <div class="errtxt" id="emcn"></div>
         <label class="lbl" style="color:#8b949e">Description <span style="color:#6e7681;font-weight:500">(optional)</span></label>
         <input class="inp" id="mcd" type="text" placeholder="What's this channel about?">
+        <label class="lbl" style="color:#8b949e;margin-top:14px">Who can join?</label>
+        <select class="inp" id="mcvisibility">
+          <option value="public">Public — anyone can join</option>
+          <option value="private">Private — admin approval required</option>
+        </select>
         <button class="btn" id="mbtn" onclick="createChannel()" style="margin-top:10px">Create Channel</button>
       </div>
     </div>
   </div>
 
   <div id="dash">
-    <div class="sidebar">
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-navigation" onclick="toggleMobileMenu()">
+      <span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+    </button>
+    <button class="mobile-menu-backdrop" type="button" aria-label="Close navigation menu" onclick="toggleMobileMenu(false)"></button>
+    <div class="sidebar" id="mobile-navigation">
       <div class="wk-hdr">
         <div class="wk-row">
           <img src="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" alt="Vialifecoach Global Foundation" style="width:38px;height:38px;border-radius:12px;object-fit:cover;box-shadow:0 3px 10px rgba(201,168,76,0.3);flex-shrink:0"/>
@@ -94,6 +103,14 @@
               </span>
               <span class="rname">Company Feed</span>
             </div>
+            <div class="row" onclick="window.location.href='reports.html'">
+              <span class="hash" aria-hidden="true">◎</span>
+              <span class="rname">Reports &amp; evaluations</span>
+            </div>
+            <button class="row workspace-ai-nav" type="button" data-assistant-toggle aria-expanded="false" aria-controls="workspace-ai-panel">
+              <span class="hash" aria-hidden="true">✦</span>
+              <span class="rname">Workspace Assistant</span>
+            </button>
           </div>
         </div>
 
@@ -117,11 +134,11 @@
         </div>
 
         <div class="me-footer">
-          <div class="me-card" id="dash-mecard" title="Click to edit your profile" style="cursor:pointer;padding:14px 12px 16px">
+          <div class="me-card" id="dash-mecard" title="Edit your profile" role="button" tabindex="0">
             <div class="av me-av" id="uav" style="width:40px;height:40px;font-size:14px;background:linear-gradient(135deg,#25D366,#075e54);pointer-events:none">?</div>
             <div style="flex:1;min-width:0;pointer-events:none">
               <div class="s-name" id="uname">User</div>
-              <div class="s-stat" style="pointer-events:none"><span class="dot"></span> <span style="cursor:pointer;pointer-events:auto" class="me-edit-btn" id="dash-edit-btn">Active · Tap to edit profile ✎</span></div>
+              <div class="s-stat me-edit-btn" id="dash-edit-btn">Edit profile <span aria-hidden="true">✎</span></div>
             </div>
           </div>
         </div>
@@ -144,33 +161,43 @@
 
       <div id="ac" style="display:none;flex-direction:column;flex:1;min-height:0">
         <div class="c-hdr">
-          <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+          <div class="ch-identity">
             <div class="ch-icon" id="chav">#</div>
-            <div style="flex:1;min-width:0">
+            <div class="ch-meta">
               <div class="c-hname" id="chname"></div>
               <div class="c-hstat" id="chstat">&#9679; Online</div>
+              <div id="ch-topic" class="ch-topic"></div>
             </div>
           </div>
-          <div id="ch-topic" class="ch-topic"></div>
-          <button class="ibtn aipill" onclick="getAI()">&#129302; AI Reply</button>
+          <div class="ch-actions">
+            <button class="ibtn" id="ch-admin-btn" style="display:none" title="Review join requests">Review requests</button>
+            <button class="ibtn" id="ch-visibility-btn" style="display:none" title="Change channel access">Make private</button>
+            <button class="ibtn" id="ch-groups-btn" style="display:none" title="Browse work groups">Work groups</button>
+            <button class="ibtn" id="ch-group-back-btn" style="display:none" title="Return to parent channel">Back to channel</button>
+          </div>
         </div>
 
         <div class="msgs-wrap">
           <div class="msgs" id="msgs"></div>
         </div>
-        <div class="typing" id="typing">&#129302; AI is typing...</div>
         <div class="composer">
           <div class="cmp-box">
             <div class="cmp-bar">
               <span class="cmp-hint" id="cmp-hint">Message #general</span>
               <div class="cmp-tools">
-                <span class="ttip" title="Bold"><b>B</b></span>
-                <span class="ttip" title="Italic"><i>I</i></span>
-                <span class="ttip" title="Code">&lt;/&gt;</span>
+                <button class="ttip" type="button" title="Bulleted list" aria-label="Bulleted list" onmousedown="event.preventDefault()" onclick="formatComposer('list')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+                <button class="ttip" type="button" title="Bold" aria-label="Bold" onmousedown="event.preventDefault()" onclick="formatComposer('bold')"><b>B</b></button>
+                <button class="ttip" type="button" title="Italic" aria-label="Italic" onmousedown="event.preventDefault()" onclick="formatComposer('italic')"><i>I</i></button>
+                <button class="ttip" type="button" title="Underline" aria-label="Underline" onmousedown="event.preventDefault()" onclick="formatComposer('underline')"><u>U</u></button>
+                <button class="ttip" type="button" title="Strikethrough" aria-label="Strikethrough" onmousedown="event.preventDefault()" onclick="formatComposer('strike')"><s>S</s></button>
+                <button class="ttip" type="button" title="Inline code" aria-label="Inline code" onmousedown="event.preventDefault()" onclick="formatComposer('code')">&lt;/&gt;</button>
+                <button class="ttip" type="button" title="Numbered list" aria-label="Numbered list" onmousedown="event.preventDefault()" onclick="formatComposer('ordered-list')">1.</button>
+                <button class="ttip" type="button" title="Quote" aria-label="Quote" onmousedown="event.preventDefault()" onclick="formatComposer('quote')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.2 5.5A5.2 5.2 0 0 0 2 10.7v7.8h8v-8H5.4a3.2 3.2 0 0 1 3.1-3V5.5H7.2Zm11 0a5.2 5.2 0 0 0-5.2 5.2v7.8h8v-8h-4.6a3.2 3.2 0 0 1 3.1-3V5.5h-1.3Z"/></svg></button>
+                <button class="ttip" type="button" title="Insert link" aria-label="Insert link" onmousedown="event.preventDefault()" onclick="formatComposer('link')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l3-3A5 5 0 0 0 13 2.9l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7"/></svg></button>
                 <span class="ttip" title="List">≡</span>
               </div>
             </div>
-            <textarea class="cmp-inp" id="minp" placeholder="" oninput="updSend()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"></textarea>
+            <div class="cmp-inp" id="minp" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Write a message" data-placeholder="Write a message…" oninput="updSend()" onkeydown="handleComposerKeydown(event)"></div>
             <div class="cmp-ftr">
               <span class="cmp-short"><b>Enter</b> to send · <b>Shift+Enter</b> for new line</span>
               <button class="sbtn off" id="sndbtn" onclick="sendMsg()">
@@ -185,5 +212,6 @@
 
   <script src="firebase-init.js"></script>
   <script src="chat.js"></script>
+  <script src="assistant.js"></script>
 </body>
 </html>

@@ -13,6 +13,30 @@ service firebase.storage {
         && (request.auth.uid == userId
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
     }
+    match /internReports/{authorUid}/{reportId}/{fileName} {
+      function reportExists() {
+        return firestore.exists(/databases/(default)/documents/internReports/$(reportId));
+      }
+      function canReadReportFile() {
+        return request.auth != null
+          && (request.auth.token.email == 'chikondigahimbare@gmail.com'
+              || (firestore.exists(/databases/(default)/documents/workspaceAdmins/$(request.auth.uid))
+                  && firestore.get(/databases/(default)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true)
+              || (reportExists()
+                  && (firestore.get(/databases/(default)/documents/internReports/$(reportId)).data.authorUid == request.auth.uid
+                      || firestore.get(/databases/(default)/documents/internReports/$(reportId)).data.currentReviewerUid == request.auth.uid
+                      || request.auth.uid in firestore.get(/databases/(default)/documents/internReports/$(reportId)).data.reviewerUids)));
+      }
+      allow read: if canReadReportFile() || request.auth != null && request.auth.uid == authorUid && !reportExists();
+      allow create: if request.auth != null
+        && request.auth.uid == authorUid
+        && !reportExists()
+        && request.resource.size <= 20 * 1024 * 1024
+        && request.resource.contentType in ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      allow update, delete: if request.auth != null
+        && request.auth.uid == authorUid
+        && !reportExists();
+    }
     match /{allPaths=**} {
       allow read, write: if request.auth != null
         && request.auth.token.email == 'chikondigahimbare@gmail.com';

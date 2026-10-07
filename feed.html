@@ -34,7 +34,11 @@
   <div id="toast"></div>
 
   <div id="dash">
-    <div class="sidebar">
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-navigation" onclick="toggleMobileMenu()">
+      <span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+    </button>
+    <button class="mobile-menu-backdrop" type="button" aria-label="Close navigation menu" onclick="toggleMobileMenu(false)"></button>
+    <div class="sidebar" id="mobile-navigation">
       <div class="wk-hdr">
         <div class="wk-row" style="cursor:pointer" onclick="go('dashboard.html')">
           <img src="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" alt="Vialifecoach Global Foundation" style="width:38px;height:38px;border-radius:12px;object-fit:cover;box-shadow:0 3px 10px rgba(201,168,76,0.3);flex-shrink:0"/>
@@ -73,6 +77,14 @@
               </span>
               <span class="rname">Company Feed</span>
             </div>
+            <div class="row" onclick="go('reports.html')">
+              <span class="hash" aria-hidden="true">◎</span>
+              <span class="rname">Reports &amp; evaluations</span>
+            </div>
+            <button class="row workspace-ai-nav" type="button" data-assistant-toggle aria-expanded="false" aria-controls="workspace-ai-panel">
+              <span class="hash" aria-hidden="true">✦</span>
+              <span class="rname">Workspace Assistant</span>
+            </button>
           </div>
         </div>
 
@@ -98,11 +110,11 @@
         </div>
 
         <div class="me-footer">
-          <div class="me-card" id="feed-mecard" title="Click to edit your profile" style="cursor:pointer;padding:14px 12px 16px">
+          <div class="me-card" id="feed-mecard" title="Edit your profile" role="button" tabindex="0">
             <div class="av me-av" id="uav" style="width:40px;height:40px;font-size:14px;background:linear-gradient(135deg,#25D366,#075e54);pointer-events:none">?</div>
             <div style="flex:1;min-width:0;margin-left:10px;pointer-events:none">
               <div class="s-name" id="uname">User</div>
-              <div class="s-stat" style="pointer-events:none"><span class="dot"></span> <span style="cursor:pointer;pointer-events:auto" class="me-edit-btn" id="feed-edit-btn">Active · Tap to edit profile ✎</span></div>
+              <div class="s-stat me-edit-btn" id="feed-edit-btn">Edit profile <span aria-hidden="true">✎</span></div>
             </div>
           </div>
         </div>
@@ -128,6 +140,7 @@
               <div class="av pch-av" id="pcav" style="width:44px;height:44px;font-size:15px;background:linear-gradient(135deg,#25D366,#075e54)">?</div>
               <div style="flex:1;min-width:0">
                 <textarea id="ptext" class="pc-inp" rows="3" placeholder="Share a win, progress, milestone, or shoutout... Type @ to mention a teammate."></textarea>
+                <div class="media-hint">Attach photos or videos between 2 and 5 minutes (up to 50 MB each). Write your description here.</div>
                 <div id="pm-prev" style="display:none;margin:6px 0 10px;padding:10px;border:1px dashed rgba(255,255,255,0.2);border-radius:12px;background:rgba(255,255,255,0.04)">
                   <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
                     <span style="font-size:12px;color:#d1d5db">📎 Media attached</span>
@@ -169,5 +182,6 @@
 
   <script src="firebase-init.js"></script>
   <script src="feed.js"></script>
+  <script src="assistant.js"></script>
 </body>
 </html>

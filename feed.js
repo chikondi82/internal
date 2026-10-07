@@ -126,55 +126,11 @@ function refreshFeedMeCards() {
     }
 
     [uav, pcav].forEach(function (av) {
-      if (!av) return;
-
-      if (ud.photoURL || me.photoURL) {
-        var p = ud.photoURL || me.photoURL;
-
-        av.style.background = '';
-        av.style.backgroundImage = 'url("' + p + '")';
-        av.style.backgroundSize = 'cover';
-        av.style.backgroundPosition = 'center';
-        av.textContent = '';
-
-      } else if (ud.emoji && ud.gradient) {
-
-        av.style.background = ud.gradient;
-        av.style.backgroundImage = '';
-        av.textContent = ud.emoji;
-
-      } else {
-
-        av.style.backgroundImage = '';
-        av.style.background = 'linear-gradient(135deg,#25D366,#075e54)';
-        av.textContent = inits(ud.name || me.displayName || me.email);
-      }
+      setUserAvatar(av, ud, me);
     });
 
     document.querySelectorAll('[id^="cav-"]').forEach(function (cav) {
-      if (!cav) return;
-
-      if (ud.photoURL || me.photoURL) {
-        var p2 = ud.photoURL || me.photoURL;
-
-        cav.style.background = '';
-        cav.style.backgroundImage = 'url("' + p2 + '")';
-        cav.style.backgroundSize = 'cover';
-        cav.style.backgroundPosition = 'center';
-        cav.textContent = '';
-
-      } else if (ud.emoji && ud.gradient) {
-
-        cav.style.background = ud.gradient;
-        cav.style.backgroundImage = '';
-        cav.textContent = ud.emoji;
-
-      } else {
-
-        cav.style.backgroundImage = '';
-        cav.style.background = 'linear-gradient(135deg,#25D366,#075e54)';
-        cav.textContent = inits(ud.name || me.displayName || me.email);
-      }
+      setUserAvatar(cav, ud, me);
     });
 
   }).catch(function () {});
@@ -183,6 +139,22 @@ function refreshFeedMeCards() {
 function go(page) {
   window.location.href = page;
 }
+
+function toggleMobileMenu(forceOpen) {
+  var dash = G('dash');
+  if (!dash) return;
+  var isOpen = typeof forceOpen === 'boolean' ? forceOpen : !dash.classList.contains('mobile-menu-open');
+  dash.classList.toggle('mobile-menu-open', isOpen);
+  var toggle = G('mobile-menu-toggle');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(isOpen));
+    toggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+  }
+}
+
+window.addEventListener('resize', function () {
+  if (window.innerWidth > 600) toggleMobileMenu(false);
+});
 
 function doLogout(e) {
   if (e) e.stopPropagation();
@@ -417,59 +389,66 @@ function timeAgo(ts) {
 function isMyPost(p) {
   if (!p || !me) return false;
 
-  if (typeof currentUserIsAdmin === 'function' && currentUserIsAdmin()) {
+  if (typeof currentUserIsSuperAdmin === 'function' && currentUserIsSuperAdmin()) {
     return true;
   }
 
   if (p.authorUid && me.uid && p.authorUid === me.uid) return true;
-
-  if (
-    p.authorUid &&
-    me.uid &&
-    String(p.authorUid).toLowerCase() === String(me.uid).toLowerCase()
-  ) {
-    return true;
-  }
-
   var myEmail = (me.email || '').trim().toLowerCase();
-  var pEmail = ((p.authorEmail || '') + '').trim().toLowerCase();
+  var postEmail = (p.authorEmail || '').trim().toLowerCase();
+  return !!(myEmail && postEmail && myEmail === postEmail);
+}
 
-  if (myEmail && pEmail && myEmail === pEmail) return true;
+function editPost(pid) {
+  var post = postsCache.find(function (item) { return item.id === pid; });
+  if (!post || !isMyPost(post)) { toast('You can only edit your own post.'); return; }
+  var card = document.getElementById('p-' + pid);
+  var textBox = card && card.querySelector('.pc-text');
+  if (!textBox) return;
+  textBox.innerHTML = '<div class="post-edit-form"><textarea class="post-edit-input" id="post-edit-' + pid + '" maxlength="5000" aria-label="Edit post text"></textarea>'
+    + '<div class="post-edit-actions"><button class="btn post-edit-cancel" type="button" onclick="cancelPostEdit(\'' + pid + '\')">Cancel</button>'
+    + '<button class="btn" type="button" onclick="savePostEdit(\'' + pid + '\')">Save changes</button></div></div>';
+  var input = document.getElementById('post-edit-' + pid);
+  input.value = post.text || '';
+  input.focus();
+}
 
-  var pName = ((p.authorName || '') + '').trim();
-  var myDisplay = ((me.displayName || me.email || '') + '').trim();
+function cancelPostEdit(pid) {
+  var post = postsCache.find(function (item) { return item.id === pid; });
+  var card = document.getElementById('p-' + pid);
+  var textBox = card && card.querySelector('.pc-text');
+  if (post && textBox) textBox.innerHTML = formatPost(post.text || '');
+}
 
-  if (typeof normalizeName === 'function' && pName && myDisplay) {
-    var nP = normalizeName(pName).replace(/\s+/g, '');
-    var nM = normalizeName(myDisplay).replace(/\s+/g, '');
-
-    if (nP && nM && (nP === nM || nP.indexOf(nM) !== -1 || nM.indexOf(nP) !== -1)) {
-      return true;
-    }
+function savePostEdit(pid) {
+  var post = postsCache.find(function (item) { return item.id === pid; });
+  var input = document.getElementById('post-edit-' + pid);
+  if (!post || !input || !isMyPost(post)) { toast('You can only edit your own post.'); return; }
+  var text = input.value.trim();
+  if (!text && !(Array.isArray(post.media) && post.media.length)) {
+    toast('Add some text or keep media attached to the post.'); return;
   }
-
-  var myName = (me.displayName || '').trim().toLowerCase();
-  var pNameLow = pName.toLowerCase();
-
-  if (
-    myName &&
-    pNameLow &&
-    myName === pNameLow &&
-    myEmail &&
-    pEmail &&
-    myEmail === pEmail
-  ) {
-    return true;
-  }
-
-  return false;
+  var saveButton = input.parentNode.querySelector('button:last-child');
+  if (saveButton) { saveButton.disabled = true; saveButton.textContent = 'Saving…'; }
+  db.collection('posts').doc(pid).update({ text: text })
+    .then(function () {
+      post.text = text;
+      var card = document.getElementById('p-' + pid);
+      var textBox = card && card.querySelector('.pc-text');
+      if (textBox) textBox.innerHTML = formatPost(text);
+      toast('Post updated.', 'success');
+    })
+    .catch(function (e) {
+      if (saveButton) { saveButton.disabled = false; saveButton.textContent = 'Save changes'; }
+      handleErr(e, 'Could not update post.');
+    });
 }
 
 function deletePost(pid) {
   if (!pid) return;
 
   if (!confirm(
-    'Delete this post? This also deletes all its comments and attached media. This CANNOT be undone.'
+    'Delete this post and its comments? This cannot be undone.'
   )) {
     return;
   }
@@ -628,13 +607,14 @@ function postHTML(p) {
 
   if (isMyPost(p)) {
     delBtn =
-      '<button type="button" style="background:transparent;border:none;color:rgba(255,255,255,0.55);cursor:pointer;font-size:15px;padding:6px 10px;border-radius:8px;transition:all .15s"'
+      '<div class="post-owner-actions"><button class="post-owner-btn" type="button" title="Edit your post" onclick="editPost(\'' + p.id + '\')">Edit</button>'
+      + '<button type="button" class="post-owner-btn post-owner-delete" style="background:transparent;border:none;color:rgba(255,255,255,0.55);cursor:pointer;font-size:15px;padding:6px 10px;border-radius:8px;transition:all .15s"'
       + ' title="Delete your post"'
       + ' onclick="deletePost(\'' + p.id + '\')"'
       + ' onmouseover="this.style.color=\'#ef4444\';this.style.background=\'rgba(239,68,68,0.12)\'"'
       + ' onmouseout="this.style.color=\'rgba(255,255,255,0.55)\';this.style.background=\'transparent\'">'
       + '🗑️'
-      + '</button>';
+      + '</button></div>';
   }
 
   var media = postMediaHTML(p);
@@ -672,12 +652,13 @@ function postHTML(p) {
     + '</div>'
     + '</div>'
 
+    + media
+
     + '<div class="pc-text">'
     + formatPost(p.text || '')
     + '</div>'
 
     + mentionHTML
-    + media
 
     + '<div class="pc-stats">'
     + (
@@ -903,15 +884,55 @@ function removeAttach(i) {
   renderMediaPreview();
 }
 
+function isPostVideoFile(file) {
+  return !!file && ((file.type || '').toLowerCase().indexOf('video/') === 0
+    || /\.(mp4|mov|webm|m4v|avi)$/i.test(file.name || ''));
+}
+
+function getVideoDuration(file) {
+  return new Promise(function (resolve, reject) {
+    var video = document.createElement('video');
+    var objectUrl = URL.createObjectURL(file);
+    var finished = false;
+    function cleanup() {
+      if (finished) return;
+      finished = true;
+      video.removeAttribute('src');
+      video.load();
+      URL.revokeObjectURL(objectUrl);
+    }
+    video.preload = 'metadata';
+    video.onloadedmetadata = function () {
+      var duration = video.duration;
+      cleanup();
+      resolve(duration);
+    };
+    video.onerror = function () {
+      cleanup(); reject(new Error('Could not read the video duration for ' + (file.name || 'this file') + '.'));
+    };
+    video.src = objectUrl;
+  });
+}
+
+function validatePostVideoDurations(files) {
+  var videos = files.filter(isPostVideoFile);
+  return Promise.all(videos.map(function (file) {
+    return getVideoDuration(file).then(function (duration) {
+      if (!isFinite(duration) || duration < 120 || duration > 300) {
+        var err = new Error((file.name || 'Each video') + ' must be between 2 and 5 minutes.');
+        err.mediaValidation = true;
+        throw err;
+      }
+    });
+  }));
+}
+
 function handlePostFileChange() {
   var inp = G('pm-file');
 
   if (!inp || !inp.files || !inp.files.length) return;
 
-  toast(
-    'Attaching ' + inp.files.length + ' file(s)...',
-    'success'
-  );
+  toast('Checking media and attaching ' + inp.files.length + ' file(s)...', 'success');
 
   var btn = G('psend');
 
@@ -929,12 +950,15 @@ function handlePostFileChange() {
   var count = 0;
   var total = previews.length;
 
-  uploadFileByInput(inp, 'posts', function (cur, tot) {
-    var tt = G('psend');
+  var selectedFiles = previews.slice();
+  validatePostVideoDurations(selectedFiles).then(function () {
+    return uploadFileByInput(inp, 'posts', function (cur, tot) {
+      var tt = G('psend');
 
-    if (tt) {
-      tt.textContent = 'Uploading ' + cur + '/' + tot + '...';
-    }
+      if (tt) {
+        tt.textContent = 'Uploading ' + cur + '/' + tot + '...';
+      }
+    });
   }).then(function (arr) {
 
     POST_MEDIA = (POST_MEDIA || []).concat(
@@ -957,7 +981,8 @@ function handlePostFileChange() {
 
   }).catch(function (err) {
 
-    handleErr(err, 'Could not attach file(s).');
+    if (err && err.mediaValidation) toast(err.message);
+    else handleErr(err, 'Could not attach file(s).');
 
     var bb = G('psend');
 
@@ -1297,32 +1322,7 @@ function toggleComments(pid) {
 
         var ud = doc.data() || {};
 
-        if (ud.photoURL || me.photoURL) {
-
-          var p = ud.photoURL || me.photoURL;
-
-          av.style.background = '';
-          av.style.backgroundImage = 'url("' + p + '")';
-          av.style.backgroundSize = 'cover';
-          av.style.backgroundPosition = 'center';
-          av.textContent = '';
-
-        } else if (ud.emoji && ud.gradient) {
-
-          av.style.background = ud.gradient;
-          av.style.backgroundImage = '';
-          av.textContent = ud.emoji;
-
-        } else {
-
-          av.style.backgroundImage = '';
-          av.style.background = 'linear-gradient(135deg,#25D366,#075e54)';
-          av.textContent = inits(
-            ud.name ||
-            me.displayName ||
-            me.email
-          );
-        }
+        setUserAvatar(av, ud, me);
 
       }).catch(function () {
 
@@ -1582,6 +1582,10 @@ function sharePost(pid) {
   }
 }
 
+document.addEventListener('workspace-role-changed', function (event) {
+  if (me && event.detail && event.detail.uid === me.uid && typeof renderFeed === 'function') renderFeed();
+});
+
 auth.onAuthStateChanged(function (user) {
 
   if (user) {
@@ -1593,46 +1597,11 @@ auth.onAuthStateChanged(function (user) {
     var uav = G('uav');
     var pcav = G('pcav');
 
-    if (uav) {
+    setUserAvatar(uav, {}, user);
+    setUserAvatar(pcav, {}, user);
 
-      if (user.photoURL) {
-
-        uav.style.backgroundImage =
-          'url("' + user.photoURL + '")';
-
-        uav.style.backgroundSize = 'cover';
-        uav.style.backgroundPosition = 'center';
-        uav.style.background = '';
-        uav.textContent = '';
-
-      } else {
-
-        uav.textContent =
-          inits(user.displayName || user.email);
-      }
-    }
-
-    if (pcav) {
-
-      if (user.photoURL) {
-
-        pcav.style.backgroundImage =
-          'url("' + user.photoURL + '")';
-
-        pcav.style.backgroundSize = 'cover';
-        pcav.style.backgroundPosition = 'center';
-        pcav.style.background = '';
-        pcav.textContent = '';
-
-      } else {
-
-        pcav.textContent =
-          inits(user.displayName || user.email);
-      }
-    }
-
-    G('uname').textContent =
-      user.displayName || user.email;
+    var uname = G('uname');
+    if (uname) uname.textContent = user.displayName || user.email;
 
     var meRef =
       db.collection('users').doc(user.uid);
@@ -1661,40 +1630,7 @@ auth.onAuthStateChanged(function (user) {
         }
 
         [uavEl, pcavEl].forEach(function (av) {
-
-          if (!av) return;
-
-          if (ud.photoURL) {
-
-            av.style.background = '';
-            av.style.backgroundImage =
-              'url("' + ud.photoURL + '")';
-
-            av.style.backgroundSize = 'cover';
-            av.style.backgroundPosition = 'center';
-            av.textContent = '';
-
-          } else if (ud.emoji && ud.gradient) {
-
-            av.style.background =
-              ud.gradient;
-
-            av.style.backgroundImage = '';
-            av.textContent = ud.emoji;
-
-          } else {
-
-            av.style.backgroundImage = '';
-            av.style.background =
-              'linear-gradient(135deg,#25D366,#075e54)';
-
-            av.textContent =
-              inits(
-                ud.name ||
-                user.displayName ||
-                user.email
-              );
-          }
+          setUserAvatar(av, ud, user);
         });
 
       },

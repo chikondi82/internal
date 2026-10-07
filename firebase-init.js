@@ -1,4 +1,4 @@
-var COLORS = ['#25D366', '#128C7E', '#075e54', '#34b7f1', '#7c3aed', '#f59e0b'];
+var COLORS = ['#25D366', '#128C7E', '#075e54', '#c9a84c', '#b89135', '#84cc16'];
 var auth, db, me = null;
 
 var SPGS_REMOVE_NAMES = [
@@ -62,6 +62,43 @@ function colFor(uid) {
   return COLORS[parseInt((uid || '0000').slice(-4), 16) % COLORS.length];
 }
 
+function setUserAvatar(el, profile, authUser) {
+  if (!el) return;
+
+  profile = profile || {};
+  authUser = authUser || {};
+
+  var name = profile.name || profile.email || authUser.displayName || authUser.email || '?';
+  var photoURL = profile.photoURL || authUser.photoURL || '';
+  var hasCustomAvatar = !!(profile.emoji && profile.gradient);
+
+  el.style.position = 'relative';
+  el.style.overflow = 'hidden';
+  el.style.backgroundImage = '';
+  el.style.background = hasCustomAvatar
+    ? profile.gradient
+    : 'linear-gradient(135deg,#25D366,#075e54)';
+  el.textContent = hasCustomAvatar ? profile.emoji : inits(name);
+  el._profileAvatarImage = null;
+
+  if (!photoURL) return;
+
+  var image = document.createElement('img');
+  image.className = 'profile-avatar-image';
+  image.alt = '';
+  image.setAttribute('aria-hidden', 'true');
+  image.onload = function () {
+    if (el._profileAvatarImage !== image) return;
+    el.textContent = '';
+    el.appendChild(image);
+  };
+  image.onerror = function () {
+    if (el._profileAvatarImage === image) el._profileAvatarImage = null;
+  };
+  el._profileAvatarImage = image;
+  image.src = photoURL;
+}
+
 function toast(msg, type) {
   type = type || 'error';
   var t = G('toast');
@@ -83,6 +120,14 @@ var FIRESTORE_RULES_TEXT = ''
   + 'rules_version = \'2\';\n'
   + 'service cloud.firestore {\n'
   + '  match /databases/{database}/documents {\n'
+  + '    function isSuperAdmin() { return request.auth != null && request.auth.token.email == \'chikondigahimbare@gmail.com\'; }\n'
+  + '    function isAdmin() { return request.auth != null && (isSuperAdmin() || (exists(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)) && get(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true)); }\n'
+  + '    function canReadInternReport(report) { return request.auth != null && (isAdmin() || report.authorUid == request.auth.uid || report.currentReviewerUid == request.auth.uid || request.auth.uid in report.reviewerUids); }\n'
+  + '    function canAccessChannel(channelId) {\n'
+  + '      let channel = get(/databases/$(database)/documents/channels/$(channelId)).data;\n'
+  + '      return request.auth != null && (isAdmin() || channelId in [\'general\', \'random\', \'announcements\'] || channel.createdBy == request.auth.uid || channel.get(\'visibility\', \'public\') != \'private\' || exists(/databases/$(database)/documents/channels/$(channelId)/members/$(request.auth.uid)));\n'
+  + '    }\n'
+  + '    function canAccessSubgroup(channelId, subgroupId) { return request.auth != null && (isAdmin() || (canAccessChannel(channelId) && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == \'private\' && exists(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(subgroupId)) && exists(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid)) && get(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid)).data.subgroupId == subgroupId)); }\n'
   + '    match /users/{userId} {\n'
   + '      allow read: if request.auth != null;\n'
   + '      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.uid == userId && request.resource.data.email is string;\n'
@@ -97,20 +142,58 @@ var FIRESTORE_RULES_TEXT = ''
   + '      allow delete: if request.auth != null && (request.auth.uid in convId.split(\'_\') || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
   + '    }\n'
   + '    match /groups/{groupId}/messages/{msgId} { allow read, create, delete: if request.auth != null; }\n'
-  + '    match /channels/{channelId} { allow read, create, delete: if request.auth != null; }\n'
+  + '    match /workspaceAdmins/{userId} { allow read: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId); allow create, update: if isSuperAdmin() && request.resource.data.uid == userId && request.resource.data.enabled is bool; allow delete: if isSuperAdmin(); }\n'
+  + '    match /workspaceConfig/{configId} { allow read: if request.auth != null; allow create, update: if isSuperAdmin() && configId == \'founder\' && request.resource.data.uid == request.auth.uid; allow delete: if isSuperAdmin() && configId == \'founder\'; }\n'
+  + '    match /orgGroups/{groupId} { allow read: if request.auth != null; allow create: if isAdmin() && request.resource.data.name is string && request.resource.data.name.size() > 0; allow update, delete: if isAdmin(); }\n'
+  + '    match /orgAssignments/{userId} { allow read: if request.auth != null && (request.auth.uid == userId || isAdmin() || resource.data.supervisorUid == request.auth.uid); allow create, update: if isAdmin() && request.resource.data.uid == userId && request.resource.data.groupId is string && exists(/databases/$(database)/documents/orgGroups/$(request.resource.data.groupId)) && request.resource.data.supervisorUid is string && request.resource.data.supervisorUid != userId; allow delete: if isAdmin(); }\n'
+  + '    match /internReports/{reportId} {\n'
+  + '      allow read: if canReadInternReport(resource.data);\n'
+  + '      allow create: if request.auth != null && request.resource.data.authorUid == request.auth.uid && request.resource.data.status == \'submitted\' && request.resource.data.title is string && request.resource.data.summary is string && request.resource.data.attachments is list && request.resource.data.attachments.size() <= 5 && exists(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)) && request.resource.data.groupId == get(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)).data.groupId && (request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)).data.supervisorUid || request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/workspaceConfig/founder).data.uid) && request.resource.data.reviewerUids == [request.resource.data.currentReviewerUid];\n'
+  + '      allow update: if isSuperAdmin() || (request.auth != null && resource.data.currentReviewerUid == request.auth.uid && request.resource.data.authorUid == resource.data.authorUid && request.resource.data.diff(resource.data).affectedKeys().hasOnly([\'status\', \'currentReviewerUid\', \'reviewerUids\', \'updatedAt\']) && request.resource.data.status in [\'reviewed\', \'forwarded\'] && ((request.resource.data.status == \'reviewed\' && request.resource.data.currentReviewerUid == null && request.resource.data.reviewerUids == resource.data.reviewerUids) || (request.resource.data.status == \'forwarded\' && request.resource.data.reviewerUids.size() == resource.data.reviewerUids.size() + 1 && request.resource.data.reviewerUids.hasAll(resource.data.reviewerUids) && request.resource.data.reviewerUids[resource.data.reviewerUids.size()] == request.resource.data.currentReviewerUid && ((exists(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)) && request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/orgAssignments/$(request.auth.uid)).data.supervisorUid) || request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/workspaceConfig/founder).data.uid))));\n'
+  + '      allow delete: if isSuperAdmin();\n'
+  + '      match /reviews/{reviewId} { allow read: if canReadInternReport(get(/databases/$(database)/documents/internReports/$(reportId)).data); allow create: if request.auth != null && get(/databases/$(database)/documents/internReports/$(reportId)).data.currentReviewerUid == request.auth.uid && request.resource.data.reviewerUid == request.auth.uid && request.resource.data.action in [\'reviewed\', \'forwarded\']; allow update, delete: if isSuperAdmin(); }\n'
+  + '    }\n'
+  + '    match /channels/{channelId} {\n'
+  + '      allow read: if request.auth != null;\n'
+  + '      allow create: if isAdmin() && request.resource.data.createdBy == request.auth.uid && request.resource.data.visibility in [\'public\', \'private\'] && (!(channelId in [\'general\', \'random\', \'announcements\']) || request.resource.data.visibility == \'public\');\n'
+  + '      allow update: if isAdmin() && (!(channelId in [\'general\', \'random\', \'announcements\']) || request.resource.data.visibility == \'public\');\n'
+  + '      allow delete: if (isAdmin() && !(channelId in [\'general\', \'random\', \'announcements\'])) || (request.auth != null && !(channelId in [\'general\', \'random\', \'announcements\']) && resource.data.createdBy == request.auth.uid);\n'
+  + '      match /members/{userId} { allow read: if request.auth != null && (request.auth.uid == userId || isAdmin()); allow create: if isAdmin() && request.resource.data.uid == userId; allow delete: if isAdmin(); }\n'
+  + '      match /requests/{userId} {\n'
+  + '        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());\n'
+  + '        allow create: if request.auth != null && request.auth.uid == userId && !(channelId in [\'general\', \'random\', \'announcements\']) && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == \'private\' && !exists(/databases/$(database)/documents/channels/$(channelId)/members/$(userId));\n'
+  + '        allow delete: if isAdmin();\n'
+  + '      }\n'
+  + '      match /subgroups/{subgroupId} {\n'
+  + '        allow read: if canAccessChannel(channelId);\n'
+  + '        allow create: if isAdmin() && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == \'private\' && request.resource.data.name is string && request.resource.data.visibility in [\'public\', \'private\'] && request.resource.data.createdBy == request.auth.uid;\n'
+  + '        allow update: if isAdmin() && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == \'private\' && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40 && request.resource.data.description is string && request.resource.data.description.size() <= 140 && request.resource.data.visibility in [\'public\', \'private\'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly([\'name\', \'description\', \'visibility\']);\n'
+  + '        match /requests/{userId} {\n'
+  + '          allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());\n'
+  + '          allow create: if request.auth != null && request.auth.uid == userId && canAccessChannel(channelId) && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == \'private\' && get(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(subgroupId)).data.get(\'visibility\', \'public\') == \'private\' && request.resource.data.uid == userId;\n'
+  + '          allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());\n'
+  + '        }\n'
+  + '        match /messages/{msgId} { allow read, create: if canAccessSubgroup(channelId, subgroupId); allow delete: if canAccessSubgroup(channelId, subgroupId) && (request.auth.uid == resource.data.senderUid || isAdmin()); }\n'
+  + '      }\n'
+  + '      match /subgroupAssignments/{userId} {\n'
+  + '        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());\n'
+  + '        allow create, update: if request.auth != null && (request.auth.uid == userId || isAdmin()) && canAccessChannel(channelId) && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == \'private\' && request.resource.data.uid == userId && request.resource.data.subgroupId is string && exists(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(request.resource.data.subgroupId)) && (isAdmin() || get(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(request.resource.data.subgroupId)).data.get(\'visibility\', \'public\') == \'public\');\n'
+  + '        allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());\n'
+  + '      }\n'
+  + '    }\n'
   + '    match /channels/{channelId}/messages/{msgId} {\n'
-  + '      allow read, create: if request.auth != null;\n'
-  + '      allow delete: if request.auth != null && (request.auth.uid == resource.data.senderUid || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
+  + '      allow read, create: if canAccessChannel(channelId);\n'
+  + '      allow delete: if canAccessChannel(channelId) && (request.auth.uid == resource.data.senderUid || isAdmin());\n'
   + '    }\n'
   + '    match /posts/{postId} {\n'
   + '      allow read: if request.auth != null;\n'
-  + '      allow create: if request.auth != null && request.resource.data.authorUid == request.auth.uid;\n'
-  + '      allow update: if request.auth != null && (request.auth.uid == resource.data.authorUid || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
-  + '      allow delete: if request.auth != null && (request.auth.uid == resource.data.authorUid || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
+  + '      allow create: if request.auth != null && request.resource.data.authorUid == request.auth.uid && request.resource.data.get(\'authorEmail\', request.auth.token.email) == request.auth.token.email;\n'
+  + '      allow update: if request.auth != null && ((request.auth.uid == resource.data.authorUid && request.resource.data.authorUid == resource.data.authorUid && request.resource.data.get(\'authorEmail\', \'\') == resource.data.get(\'authorEmail\', \'\')) || (resource.data.get(\'authorUid\', \'\') == \'\' && request.auth.token.email != null && request.auth.token.email == resource.data.get(\'authorEmail\', \'\') && request.resource.data.get(\'authorUid\', \'\') == \'\') || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
+  + '      allow delete: if request.auth != null && (request.auth.uid == resource.data.authorUid || (resource.data.get(\'authorUid\', \'\') == \'\' && request.auth.token.email != null && request.auth.token.email == resource.data.get(\'authorEmail\', \'\')) || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
   + '    }\n'
   + '    match /posts/{postId}/comments/{commentId} {\n'
   + '      allow read, create: if request.auth != null;\n'
-  + '      allow delete: if request.auth != null && (request.auth.uid == resource.data.authorUid || request.auth.uid == resource.data.postAuthorUid || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
+  + '      allow delete: if request.auth != null && (request.auth.uid == resource.data.authorUid || request.auth.uid == resource.data.postAuthorUid || request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.get(\'authorUid\', \'\') || (get(/databases/$(database)/documents/posts/$(postId)).data.get(\'authorUid\', \'\') == \'\' && request.auth.token.email != null && request.auth.token.email == get(/databases/$(database)/documents/posts/$(postId)).data.get(\'authorEmail\', \'\')) || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
   + '    }\n'
   + '    match /{document=**} { allow read, write: if request.auth != null && request.auth.token.email == \'chikondigahimbare@gmail.com\'; }\n'
   + '  }\n'
@@ -127,6 +210,13 @@ var STORAGE_RULES_TEXT = ''
   + '    match /posts/{userId}/{allPaths=**} {\n'
   + '      allow read: if request.auth != null;\n'
   + '      allow write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
+  + '    }\n'
+  + '    match /internReports/{authorUid}/{reportId}/{fileName} {\n'
+  + '      function reportExists() { return firestore.exists(/databases/(default)/documents/internReports/$(reportId)); }\n'
+  + '      function canReadReportFile() { return request.auth != null && (request.auth.token.email == \'chikondigahimbare@gmail.com\' || (firestore.exists(/databases/(default)/documents/workspaceAdmins/$(request.auth.uid)) && firestore.get(/databases/(default)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true) || (reportExists() && (firestore.get(/databases/(default)/documents/internReports/$(reportId)).data.authorUid == request.auth.uid || firestore.get(/databases/(default)/documents/internReports/$(reportId)).data.currentReviewerUid == request.auth.uid || request.auth.uid in firestore.get(/databases/(default)/documents/internReports/$(reportId)).data.reviewerUids))); }\n'
+  + '      allow read: if canReadReportFile() || (request.auth != null && request.auth.uid == authorUid && !reportExists());\n'
+  + '      allow create: if request.auth != null && request.auth.uid == authorUid && !reportExists() && request.resource.size <= 20 * 1024 * 1024 && request.resource.contentType in [\'application/pdf\', \'application/vnd.openxmlformats-officedocument.wordprocessingml.document\'];\n'
+  + '      allow update, delete: if request.auth != null && request.auth.uid == authorUid && !reportExists();\n'
   + '    }\n'
   + '    match /{allPaths=**} {\n'
   + '      allow read, write: if request.auth != null && request.auth.token.email == \'chikondigahimbare@gmail.com\';\n'
@@ -178,9 +268,9 @@ function _permHtml() {
     + '  <div style="margin-bottom:8px;font-weight:600;color:#fff">Fix permission toasts in 30 seconds:</div>'
     + '  <ol style="padding-left:18px;margin:0 0 10px;line-height:1.6">'
     + '    <li>Click <b style="color:#fde68a">Copy Firestore Rules</b> below.</li>'
-    + '    <li>Open <a href="https://console.firebase.google.com/project/whatsapp-internal-4a29f/firestore/rules" target="_blank" style="color:#93c5fd;text-decoration:underline">Firestore → Rules</a>.</li>'
+    + '    <li>Open <a href="https://console.firebase.google.com/project/whatsapp-internal-4a29f/firestore/rules" target="_blank" style="color:#c9a84c;text-decoration:underline">Firestore → Rules</a>.</li>'
     + '    <li>Delete everything in the editor, <b>Paste (Ctrl+V)</b>, click <b>Publish</b>.</li>'
-    + '    <li>Repeat for <a href="https://console.firebase.google.com/project/whatsapp-internal-4a29f/storage/rules" target="_blank" style="color:#93c5fd;text-decoration:underline">Storage → Rules</a> using the Storage button.</li>'
+    + '    <li>Repeat for <a href="https://console.firebase.google.com/project/whatsapp-internal-4a29f/storage/rules" target="_blank" style="color:#c9a84c;text-decoration:underline">Storage → Rules</a> using the Storage button.</li>'
     + '  </ol>'
     + '  <div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '    <button type="button" class="btn" style="padding:6px 10px;font-size:12px" onclick="copyFirestoreRules()">📋 Copy Firestore Rules</button>'
@@ -218,7 +308,7 @@ function testPermissions() {
   toast('Testing Firestore + Storage permissions. See browser DevTools (F12) → Console for the full report.', 'success');
   var uid = me.uid;
   var email = me.email || '';
-  console.group('%c 🔎 Firestore + Storage Permission Test ', 'background:#7c3aed;color:#fff;font-weight:800');
+  console.group('%c 🔎 Firestore + Storage Permission Test ', 'background:#075e45;color:#fff;font-weight:800');
   console.log('user uid:', uid);
   console.log('user email:', email);
 
@@ -475,13 +565,38 @@ var ADMIN_EMAILS = [
   'chikondigahimbare@gmail.com'
 ];
 
-function currentUserIsAdmin() {
+var delegatedWorkspaceAdmin = false;
+var delegatedWorkspaceAdminUid = '';
+var delegatedWorkspaceAdminUnsub = null;
+
+function currentUserIsSuperAdmin() {
   if (!me || !me.email) return false;
-  try {
-    var u = me.email.toLowerCase();
-    return ADMIN_EMAILS.indexOf(u) !== -1;
-  } catch (e) { return false; }
+  return ADMIN_EMAILS.indexOf(String(me.email).toLowerCase()) !== -1;
 }
+
+function currentUserIsAdmin() {
+  if (currentUserIsSuperAdmin()) return true;
+  return !!(me && me.uid && delegatedWorkspaceAdmin && delegatedWorkspaceAdminUid === me.uid);
+}
+
+auth.onAuthStateChanged(function (user) {
+  me = user || null;
+  if (delegatedWorkspaceAdminUnsub) { try { delegatedWorkspaceAdminUnsub(); } catch (e) {} }
+  delegatedWorkspaceAdminUnsub = null;
+  delegatedWorkspaceAdmin = false;
+  delegatedWorkspaceAdminUid = user ? user.uid : '';
+  if (user && ADMIN_EMAILS.indexOf(String(user.email || '').toLowerCase()) === -1) {
+    delegatedWorkspaceAdminUnsub = db.collection('workspaceAdmins').doc(user.uid).onSnapshot(function (doc) {
+      delegatedWorkspaceAdmin = doc.exists && doc.data().enabled === true;
+      document.dispatchEvent(new CustomEvent('workspace-role-changed', { detail: { uid: user.uid, isAdmin: currentUserIsAdmin() } }));
+    }, function () {
+      delegatedWorkspaceAdmin = false;
+      document.dispatchEvent(new CustomEvent('workspace-role-changed', { detail: { uid: user.uid, isAdmin: false } }));
+    });
+  } else {
+    document.dispatchEvent(new CustomEvent('workspace-role-changed', { detail: { uid: user ? user.uid : '', isAdmin: !!user } }));
+  }
+});
 
 function openProfileIfReady() {
   try {
@@ -512,6 +627,13 @@ function bindMeFooterOnce() {
       e.stopPropagation();
       openProfileIfReady();
     });
+    if (el.classList.contains('me-card')) {
+      el.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        openProfileIfReady();
+      });
+    }
     el._boundClick = true;
   }
 
@@ -555,22 +677,23 @@ function dataURLFromFile(file) {
 function uploadMediaFile(file, folder) {
   folder = folder || 'posts';
   var name = (file.name || ('up-' + (Math.random() + 1).toString(36).slice(2, 8))).replace(/[^a-zA-Z0-9._-]+/g, '_');
+  var kind = (file.type || '').toLowerCase().indexOf('video/') === 0 || /\.(mp4|mov|webm|m4v|avi)$/i.test(name) ? 'video' : 'image';
   var path = folder + '/' + (me && me.uid || 'anon') + '/' + Date.now() + '-' + name;
   if (STORAGE_AVAILABLE && storage) {
     var ref = storage.ref(path);
     return ref.put(file).then(function (snap) {
       return snap.ref.getDownloadURL().then(function (url) {
-        return Promise.resolve({ url: url, path: path, kind: (file.type || '').startsWith('video/') ? 'video' : 'image' });
+        return Promise.resolve({ url: url, path: path, kind: kind });
       });
     }).catch(function (e) {
       console.warn('Storage upload failed, falling back to dataURL:', e);
       return dataURLFromFile(file).then(function (durl) {
-        return Promise.resolve({ url: durl, path: null, kind: (file.type || '').startsWith('video/') ? 'video' : 'image' });
+        return Promise.resolve({ url: durl, path: null, kind: kind });
       });
     });
   }
   return dataURLFromFile(file).then(function (durl) {
-    return Promise.resolve({ url: durl, path: null, kind: (file.type || '').startsWith('video/') ? 'video' : 'image' });
+    return Promise.resolve({ url: durl, path: null, kind: kind });
   });
 }
 
@@ -640,10 +763,10 @@ function uploadFileByInput(input, folder, onProgress) {
 /* ========== SHARED PROFILE MODAL (dashboard + feed) ========== */
 var PROFILE_PRESET_EMOJIS = ['🚀','👨‍💼','👩‍💼','🧑‍💻','👨‍🎨','👩‍🔬','🦊','🐼','🦁','🐸','🌈','⭐','🏆','💼','🎯','🔥','💡','🌱'];
 var PROFILE_PRESET_GRADIENTS = [
-  'linear-gradient(135deg,#25D366,#075e54)','linear-gradient(135deg,#7c3aed,#34b7f1)',
-  'linear-gradient(135deg,#f59e0b,#ef4444)','linear-gradient(135deg,#ec4899,#8b5cf6)',
-  'linear-gradient(135deg,#14b8a6,#34b7f1)','linear-gradient(135deg,#e11d48,#fb7185)',
-  'linear-gradient(135deg,#0ea5e9,#6366f1)','linear-gradient(135deg,#84cc16,#22c55e)'
+  'linear-gradient(135deg,#25D366,#075e54)','linear-gradient(135deg,#c9a84c,#8f6b22)',
+  'linear-gradient(135deg,#f59e0b,#b7791f)','linear-gradient(135deg,#84cc16,#22c55e)',
+  'linear-gradient(135deg,#14b8a6,#075e54)','linear-gradient(135deg,#d6b85a,#25a96b)',
+  'linear-gradient(135deg,#0f8a5f,#c9a84c)','linear-gradient(135deg,#84cc16,#25D366)'
 ];
 var PROFILE_UPLOADED_DATAURL = '';
 var PROFILE_UPLOADED_REMOTE_URL = '';
@@ -672,8 +795,8 @@ function buildProfileModalIfNeeded() {
     + '  <div class="modal-body">'
     + '    <div class="pav-wrap" id="pav-wrap" title="Click to upload a picture from phone/laptop" style="cursor:pointer">'
     + '      <div class="pav-preview" id="pav-preview">🚀</div>'
-    + '      <div style="font-size:11px;color:#93c5fd;text-align:center;margin-top:6px">Tap the avatar to upload a photo from device</div>'
     + '    </div>'
+    + '    <p class="profile-avatar-help">Tap the avatar to upload a photo</p>'
     + '    <input type="file" id="pfile-input" accept="image/*" capture="user" style="display:none" />'
     + '    <div class="pf-row">'
     + '      <label class="lbl">Avatar type</label>'
