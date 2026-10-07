@@ -29,3 +29,19 @@ The assistant cannot independently search all workspace history or perform
 workspace actions. Drafts are placed in the appropriate composer only after
 the user selects **Use draft**; messages and posts are never sent automatically.
 Review all AI responses and drafts before relying on or sharing them.
+
+## Direct Messages directory
+
+The Direct Messages roster is populated from the users currently registered in
+Firebase Authentication. When a signed-in teammate opens the dashboard, the
+server syncs their basic directory details (name, email, and photo) into Firestore
+so everyone can find and start a private conversation with them. This does not
+create, restore, or change Firebase Authentication accounts, and it preserves
+existing Firestore profile details.
+
+The server needs Firebase Admin credentials for the `whatsapp-internal-4a29f`
+project. Set `FIREBASE_SERVICE_ACCOUNT` to the service-account JSON as a server
+environment secret (for example, in Render); do not put the key in browser code
+or commit it. The service account needs Firebase Authentication user-listing
+access and Firestore write access. Local development may instead use Application
+Default Credentials. The administrator's Firebase email must be verified.

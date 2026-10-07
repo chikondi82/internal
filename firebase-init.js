@@ -34,24 +34,52 @@ function normalizeName(n) {
 function isSPGSUser(u) {
   if (!u) return false;
   var nn = normalizeName(u.name || '');
-  if (!nn) {
-    var iname = normalizeName(u.email || '').split('@')[0];
-    if (iname && SPGS_REMOVE_NAMES.some(function (t) { return iname.indexOf(t.replace(/\s+/g, '')) !== -1; })) return true;
-    var ii = inits(u.email || u.uid || '');
-    return ii === 'SP' || ii === 'GS';
-  }
-  var compact = nn.replace(/\s+/g, '');
-  if (SPGS_REMOVE_NAMES.some(function (t) {
-    var tc = t.replace(/\s+/g, '');
-    return compact === tc || compact.indexOf(tc) !== -1 || tc.indexOf(compact) !== -1;
-  })) return true;
-  var tok = nn.split(/\s+/).filter(Boolean);
-  var f = tok[0] || '', m = tok[1] || '', l = tok[tok.length - 1] || '';
-  if ((f === 'somon' || f === 'somons') && (l === 'gahimbare' || tok.indexOf('pierre') !== -1)) return true;
-  if (l === 'gahimbare' && f === 'simon' && m === 'pierre') return true;
-  if (l === 'gahimbare' && f === 'gahimbare') return true;
-  var ii = inits(u.name || u.email || '');
-  return ii === 'SP' || ii === 'GS';
+  var emailName = normalizeName((u.email || '').split('@')[0]);
+  return SPGS_REMOVE_NAMES.some(function (name) {
+    var excludedName = normalizeName(name);
+    return nn === excludedName
+      || emailName.replace(/\s+/g, '') === excludedName.replace(/\s+/g, '');
+  });
+}
+
+function ensureUserProfile(user) {
+  var userRef = db.collection('users').doc(user.uid);
+  return userRef.get().then(function (doc) {
+    var profile = doc.exists ? (doc.data() || {}) : {};
+    var updates = {};
+    if (profile.uid !== user.uid) updates.uid = user.uid;
+    if (!profile.email) updates.email = user.email || '';
+    if (!profile.name) updates.name = user.displayName || user.email || 'Workspace user';
+    if (!doc.exists) updates.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    if (!Object.keys(updates).length) return;
+    return userRef.set(updates, { merge: true });
+  });
+}
+
+function syncDmDirectory(user) {
+  return user.getIdToken().then(function (token) {
+    return fetch('/api/workspace/users/sync', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token }
+    });
+  }).then(function (response) {
+    return response.text().then(function (body) {
+      var result;
+      try {
+        result = body ? JSON.parse(body) : {};
+      } catch (e) {
+        if (response.status === 404) {
+          throw new Error('Direct message directory API returned 404. Redeploy the Netlify site and server so the registered-user sync route is available.');
+        }
+        throw new Error('Direct message directory service returned an invalid response (HTTP ' + response.status + '). Check the server deployment and API proxy.');
+      }
+      if (!response.ok) throw new Error(result.error || 'Could not load registered teammates.');
+      if (typeof result.synced !== 'number' || typeof result.created !== 'number') {
+        throw new Error('The direct message directory response was invalid.');
+      }
+      return result;
+    });
+  });
 }
 
 function cid(a, b) {

@@ -11,10 +11,6 @@ function isAlwaysPublicChannel(channelId) {
   return ['general', 'random', 'announcements'].indexOf(String(channelId || '').toLowerCase()) !== -1;
 }
 
-function userIsRemoved(u) {
-  return isSPGSUser(u);
-}
-
 /* handleErr is SHARED from firebase-init.js (includes full console.group diagnostics
    + copy rules to clipboard + test permissions action buttons in the toast). */
 
@@ -112,13 +108,16 @@ function loadChannels() {
 
 function loadUsers() {
   if (usersUnsub) { try { usersUnsub(); } catch (e) {} }
+  var dmList = G('dmlist');
+  if (dmList && !usersCache.length) {
+    dmList.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-size:12px;padding:4px 8px 10px">Loading teammates…</div>';
+  }
   usersUnsub = db.collection('users').onSnapshot(function (snap) {
     usersCache = [];
     TOTAL_USERS = 0;
     snap.forEach(function (d) {
       var u = d.data();
       u.uid = d.id;
-      if (userIsRemoved(u)) return;
       TOTAL_USERS++;
       if (d.id !== me.uid) usersCache.push(u);
     });
@@ -127,8 +126,9 @@ function loadUsers() {
       tch.innerHTML = '<span class="dot"></span> ' + TOTAL_USERS + ' member' + (TOTAL_USERS === 1 ? '' : 's');
     }
     renderSidebar();
+    updateSuperAdminDmActions();
     if (ac && ac.type === 'dm') {
-      var row = G('dm-' + ac.uid);
+      var row = findDMRow(ac.uid);
       if (row) row.classList.add('on');
       var u = usersCache.find(function (x) { return x.uid === ac.uid; });
       if (u) {
@@ -150,7 +150,12 @@ function loadUsers() {
       }
     }
     refreshMeCard();
-  }, function (e) { handleErr(e, 'Could not load users.'); });
+  }, function (e) {
+    if (dmList) {
+      dmList.innerHTML = '<div style="color:#fca5a5;font-size:12px;padding:4px 8px 10px">Could not load teammates. <button class="ibtn" type="button" onclick="loadUsers()">Retry</button></div>';
+    }
+    handleErr(e, 'Could not load users.');
+  });
 }
 
 function renderSidebar() {
@@ -179,12 +184,131 @@ function renderDMs() {
     el.innerHTML = '<div style="color:rgba(255,255,255,0.28);font-size:12px;padding:4px 8px 10px;line-height:1.6">No teammates yet.<br/>Invite colleagues to sign up!</div>';
     return;
   }
-  el.innerHTML = usersCache.map(function (u) {
+  renderDMRows(el, usersCache);
+}
+
+function findDMRow(uid) {
+  var list = G('dmlist');
+  if (!list) return null;
+  var rows = list.querySelectorAll('.dm-user-row');
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].getAttribute('data-user-uid') === uid) return rows[i];
+  }
+  return null;
+}
+
+function renderDMRows(el, users) {
+  el.innerHTML = users.map(function (u, index) {
     var on = ac && ac.type === 'dm' && ac.uid === u.uid ? 'on' : '';
-    return '<div class="row ' + on + '" id="dm-' + u.uid + '" onclick="openChat(\'' + u.uid + '\',\'' + esc(u.name || u.email) + '\',\'' + colFor(u.uid) + '\',\'' + inits(u.name || u.email) + '\')">'
+    return '<div class="row dm-user-row ' + on + '" data-user-uid="' + esc(u.uid) + '" data-user-index="' + index + '">'
       + avHTML(u, 20)
-      + '<span class="rname">' + esc(u.name || u.email) + '</span></div>';
+      + '<span class="rname">' + esc(u.name || u.email || 'Workspace user') + '</span></div>';
   }).join('');
+
+  Array.prototype.forEach.call(el.querySelectorAll('.dm-user-row'), function (row) {
+    var user = users[Number(row.getAttribute('data-user-index'))];
+    if (!user) return;
+    row.addEventListener('click', function () {
+      var name = user.name || user.email || 'Workspace user';
+      openChat(user.uid, name, colFor(user.uid), inits(name));
+    });
+  });
+}
+
+function updateSuperAdminDmActions() {
+  var button = G('ch-clear-dm-btn');
+  if (!button) return;
+  var user = ac && ac.type === 'dm'
+    ? usersCache.find(function (candidate) { return candidate.uid === ac.uid; })
+    : null;
+  button.style.display = user
+    && String(user.email || '').toLowerCase() === 'chikondigahimbare@gmail.com'
+    ? ''
+    : 'none';
+}
+
+function clearSuperAdminDmHistory() {
+  if (!me || !ac || ac.type !== 'dm') return;
+  var user = usersCache.find(function (candidate) { return candidate.uid === ac.uid; });
+  if (!user || String(user.email || '').toLowerCase() !== 'chikondigahimbare@gmail.com') {
+    toast('Open the direct message with the workspace super admin first.', 'error');
+    return;
+  }
+  if (!confirm('Permanently delete every message in your direct message history with the workspace super admin? This cannot be undone.')) return;
+
+  var button = G('ch-clear-dm-btn');
+  if (button) button.disabled = true;
+  var messages = db.collection('conversations').doc(cid(me.uid, ac.uid)).collection('messages');
+  var deleted = 0;
+
+  function deleteNextBatch() {
+    return messages.limit(450).get().then(function (snap) {
+      if (snap.empty) return;
+      var batch = db.batch();
+      snap.docs.forEach(function (doc) { batch.delete(doc.ref); });
+      return batch.commit().then(function () {
+        deleted += snap.size;
+        return deleteNextBatch();
+      });
+    });
+  }
+
+  deleteNextBatch().then(function () {
+    toast('Deleted ' + deleted + ' message(s) from this conversation.', 'success');
+  }).catch(function (e) {
+    handleErr(e, 'Could not clear this conversation.');
+  }).then(function () {
+    if (button) button.disabled = false;
+  });
+}
+
+function clearAllChannelMessages() {
+  if (!currentUserIsAdmin()) {
+    toast('Only a workspace admin can clear channel messages.', 'error');
+    return;
+  }
+  if (!confirm('Permanently delete every message in every channel and work group? This cannot be undone.')) return;
+
+  var button = G('ch-clear-channels-btn');
+  if (button) button.disabled = true;
+  var deleted = 0;
+
+  function deleteCollection(collectionRef) {
+    function nextBatch() {
+      return collectionRef.limit(450).get().then(function (snap) {
+        if (snap.empty) return;
+        var batch = db.batch();
+        snap.docs.forEach(function (doc) { batch.delete(doc.ref); });
+        return batch.commit().then(function () {
+          deleted += snap.size;
+          return nextBatch();
+        });
+      });
+    }
+    return nextBatch();
+  }
+
+  db.collection('channels').get().then(function (channels) {
+    var tasks = [];
+    channels.forEach(function (channel) {
+      var base = channel.ref;
+      tasks.push(deleteCollection(base.collection('messages')));
+      tasks.push(base.collection('subgroups').get().then(function (subgroups) {
+        var subgroupTasks = [];
+        subgroups.forEach(function (subgroup) {
+          subgroupTasks.push(deleteCollection(subgroup.ref.collection('messages')));
+        });
+        return Promise.all(subgroupTasks);
+      }));
+    });
+    return Promise.all(tasks);
+  }).then(function () {
+    toast('Deleted ' + deleted + ' message(s) from channels and work groups.', 'success');
+  }).catch(function (e) {
+    handleErr(e, 'Could not clear all channel messages. Some messages may have been deleted before the error.');
+  }).then(function () {
+    if (button) button.disabled = false;
+  });
 }
 
 function onSearch() {
@@ -200,12 +324,11 @@ function onSearch() {
     }).join('');
   var del = G('dmlist');
   var fdm = usersCache.filter(function (u) { return (u.name || '').toLowerCase().indexOf(q) > -1 || (u.email || '').toLowerCase().indexOf(q) > -1; });
-  del.innerHTML = !fdm.length ? '<div style="color:rgba(255,255,255,0.28);font-size:12px;padding:4px 8px">No people</div>'
-    : fdm.map(function (u) {
-      var on = ac && ac.type === 'dm' && ac.uid === u.uid ? 'on' : '';
-      return '<div class="row ' + on + '" onclick="openChat(\'' + u.uid + '\',\'' + esc(u.name || u.email) + '\',\'' + colFor(u.uid) + '\',\'' + inits(u.name || u.email) + '\')">'
-        + avHTML(u, 20) + '<span class="rname">' + esc(u.name || u.email) + '</span></div>';
-    }).join('');
+  if (!fdm.length) {
+    del.innerHTML = '<div style="color:rgba(255,255,255,0.28);font-size:12px;padding:4px 8px">No people</div>';
+    return;
+  }
+  renderDMRows(del, fdm);
 }
 
 function toggleSect(k) {
@@ -278,6 +401,8 @@ function scrollToDM() {
 
 function openChannel(cid, fallbackName, fallbackDesc) {
   toggleMobileMenu(false);
+  var clearDmButton = G('ch-clear-dm-btn');
+  if (clearDmButton) clearDmButton.style.display = 'none';
   var c = channelsCache.find(function (x) { return x.id === cid; });
   if (!c) {
     var ref = db.collection('channels').doc(cid);
@@ -545,6 +670,8 @@ function selectChannelSubgroup(channelId, subgroupId) {
 }
 
 function openSubgroup(channelId, subgroupId) {
+  var clearDmButton = G('ch-clear-dm-btn');
+  if (clearDmButton) clearDmButton.style.display = 'none';
   var base = db.collection('channels').doc(channelId);
   Promise.all([
     base.get(), base.collection('subgroups').doc(subgroupId).get(),
@@ -615,7 +742,7 @@ function preserveCurrentChannelMembers(c) {
     snaps[1].forEach(function (doc) { existing[doc.id] = true; });
     var toAdd = [];
     snaps[0].forEach(function (doc) {
-      if (!userIsRemoved(doc.data()) && !existing[doc.id]) toAdd.push(doc.id);
+      if (!existing[doc.id]) toAdd.push(doc.id);
     });
     var work = Promise.resolve();
     for (var i = 0; i < toAdd.length; i += 450) {
@@ -637,7 +764,11 @@ function preserveCurrentChannelMembers(c) {
 }
 
 function _realOpenChannel(cid, cname, cdesc) {
+  var clearDmButton = G('ch-clear-dm-btn');
+  if (clearDmButton) clearDmButton.style.display = 'none';
   var c = channelsCache.find(function (x) { return x.id === cid; }) || { id: cid, name: cname, description: cdesc };
+  var clearChannelsButton = G('ch-clear-channels-btn');
+  if (clearChannelsButton) clearChannelsButton.style.display = currentUserIsAdmin() ? '' : 'none';
   ac = { type: 'channel', id: cid, name: c.name, description: c.description };
   activeOff();
   var row = G('ch-' + cid); if (row) row.classList.add('on');
@@ -697,6 +828,10 @@ function channelIntroHTML(c) {
 
 function openChat(uid, name, color, ini) {
   toggleMobileMenu(false);
+  var clearDmButton = G('ch-clear-dm-btn');
+  if (clearDmButton) clearDmButton.style.display = 'none';
+  var clearChannelsButton = G('ch-clear-channels-btn');
+  if (clearChannelsButton) clearChannelsButton.style.display = 'none';
   var adminBtn = G('ch-admin-btn'); if (adminBtn) adminBtn.style.display = 'none';
   var visibilityBtn = G('ch-visibility-btn'); if (visibilityBtn) visibilityBtn.style.display = 'none';
   var groupsBtn = G('ch-groups-btn'); if (groupsBtn) groupsBtn.style.display = 'none';
@@ -706,8 +841,9 @@ function openChat(uid, name, color, ini) {
   var liveColor = colFor(uid);
   var liveIni = inits(u.name || u.email || name);
   ac = { type: 'dm', uid: uid, name: liveName, color: liveColor, ini: liveIni };
+  updateSuperAdminDmActions();
   activeOff();
-  var row = G('dm-' + uid); if (row) row.classList.add('on');
+  var row = findDMRow(uid); if (row) row.classList.add('on');
   G('nc').style.display = 'none';
   G('ac').style.display = 'flex';
   var chav = G('chav');
@@ -767,7 +903,6 @@ function dmIntroHTML(name, uObj) {
 }
 
 function addMsg(data, area, mode) {
-  if (userIsRemoved({ name: data.senderName, uid: data.senderUid })) return;
   var isMe = data.senderUid === me.uid;
   var ts = data.createdAt ? data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'now';
   var cached = usersCache.find(function (u) { return u.uid === data.senderUid; });
@@ -1037,6 +1172,16 @@ auth.onAuthStateChanged(function (user) {
     }, function () {});
     loadChannels();
     loadUsers();
+    ensureUserProfile(user).catch(function (e) {
+      console.error('Could not create the signed-in user profile:', e);
+      toast('Could not save your user profile: ' + (e.message || e.code || 'unknown error'), 'error');
+    });
+    syncDmDirectory(user).then(function (result) {
+      if (result.created > 0) loadUsers();
+    }).catch(function (e) {
+      console.error('Could not load registered teammates:', e);
+      toast('Could not load all registered teammates: ' + (e.message || e.code || 'unknown error'), 'error');
+    });
   } else {
     me = null;
     if (meDocUnsub) { try { meDocUnsub(); } catch (e) {} }

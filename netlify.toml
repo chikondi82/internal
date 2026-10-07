@@ -1,4 +1,10 @@
 [[redirects]]
+  from = "/api/workspace/users/sync"
+  to = "https://internal-uwi1.onrender.com/api/workspace/users/sync"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/ai/assistant"
   to = "https://internal-uwi1.onrender.com/api/ai/assistant"
   status = 200

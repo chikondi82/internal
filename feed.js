@@ -7,10 +7,6 @@ var TOTAL_USERS = 0;
 
 var DEFAULT_EMOJIS = ['🎉','👏','🏆','💚','🚀','✅','💡','🔥','🙌','😊','👍','💯','❤️','😎','🤝'];
 
-function userIsRemoved(u) {
-  return isSPGSUser(u);
-}
-
 function avHTML(u, size) {
   size = size || 20;
 
@@ -91,8 +87,6 @@ function loadUsers() {
     snap.forEach(function (d) {
       var u = d.data();
       u.uid = d.id;
-
-      if (userIsRemoved(u)) return;
 
       count++;
       usersCache.push(u);
@@ -295,9 +289,7 @@ function renderFeed() {
   var q = (sinp ? sinp.value : '').toLowerCase().trim();
   var el = G('feed');
 
-  var list = postsCache.filter(function (p) {
-    return !userIsRemoved({ name: p.authorName });
-  });
+  var list = postsCache;
 
   if (q) {
     list = list.filter(function (p) {
@@ -1447,11 +1439,7 @@ function renderComments(pid, list) {
 
   if (!el) return;
 
-  var filtered = list.filter(function (c) {
-    return !userIsRemoved({
-      name: c.authorName
-    });
-  });
+  var filtered = list;
 
   if (!filtered.length) {
     el.innerHTML =

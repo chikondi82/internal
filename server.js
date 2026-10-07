@@ -1,6 +1,9 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+const { applicationDefault, cert, getApps, initializeApp } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const { FieldValue, getFirestore } = require('firebase-admin/firestore');
 require('dotenv').config();
 
 const app = express();
@@ -10,6 +13,21 @@ const firebaseCertsUrl = 'https://www.googleapis.com/robot/v1/metadata/x509/secu
 let firebaseSigningKeys = null;
 let firebaseKeysExpireAt = 0;
 const aiRequestWindows = new Map();
+
+function getFirebaseAdminServices() {
+    let adminApp = getApps().find((candidate) => candidate.name === 'workspace-user-sync');
+    if (!adminApp) {
+        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+        const credential = serviceAccountJson
+            ? cert(JSON.parse(serviceAccountJson))
+            : applicationDefault();
+        adminApp = initializeApp({
+            credential,
+            projectId: FIREBASE_PROJECT_ID
+        }, 'workspace-user-sync');
+    }
+    return { auth: getAuth(adminApp), firestore: getFirestore(adminApp) };
+}
 
 app.use(express.json({ limit: '32kb' }));
 
@@ -82,6 +100,63 @@ async function verifyFirebaseIdToken(token) {
 
     return claims;
 }
+
+app.post(['/api/workspace/users/sync', '/api/workspace/dm-directory/sync'], async (req, res) => {
+    const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
+    if (!match) return res.status(401).json({ error: 'Sign in to load the direct message directory.' });
+
+    let claims;
+    try {
+        claims = await verifyFirebaseIdToken(match[1]);
+    } catch (error) {
+        console.error('Firebase token verification failed for user sync:', error);
+        return res.status(503).json({ error: 'Could not verify your sign-in right now. Please try again.' });
+    }
+    if (!claims) return res.status(401).json({ error: 'Your sign-in has expired. Please sign in again.' });
+
+    try {
+        const { auth: adminAuth, firestore } = getFirebaseAdminServices();
+        const usersCollection = firestore.collection('users');
+        let pageToken;
+        let synced = 0;
+        let created = 0;
+
+        do {
+            const page = await adminAuth.listUsers(1000, pageToken);
+            for (let offset = 0; offset < page.users.length; offset += 400) {
+                const users = page.users.slice(offset, offset + 400);
+                const refs = users.map((user) => usersCollection.doc(user.uid));
+                const snapshots = await firestore.getAll(...refs);
+                const batch = firestore.batch();
+
+                users.forEach((user, index) => {
+                    const snapshot = snapshots[index];
+                    const profile = snapshot.exists ? (snapshot.data() || {}) : {};
+                    const userData = {
+                        uid: user.uid,
+                        email: user.email || profile.email || '',
+                        name: profile.name || user.displayName || user.email || 'Workspace user'
+                    };
+                    if (user.photoURL && !profile.photoURL) userData.photoURL = user.photoURL;
+                    if (!snapshot.exists) userData.createdAt = FieldValue.serverTimestamp();
+                    batch.set(refs[index], userData, { merge: true });
+                    if (!snapshot.exists) created += 1;
+                    synced += 1;
+                });
+
+                await batch.commit();
+            }
+            pageToken = page.pageToken;
+        } while (pageToken);
+
+        return res.json({ synced, created });
+    } catch (error) {
+        console.error('Direct message directory sync failed:', error);
+        return res.status(503).json({
+            error: 'Could not load registered teammates. Configure Firebase Admin credentials for this server and try again.'
+        });
+    }
+});
 
 function isWithinAiRateLimit(uid) {
     const now = Date.now();
