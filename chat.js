@@ -1180,7 +1180,6 @@ auth.onAuthStateChanged(function (user) {
       if (result.created > 0) loadUsers();
     }).catch(function (e) {
       console.error('Could not load registered teammates:', e);
-      toast('Could not load all registered teammates: ' + (e.message || e.code || 'unknown error'), 'error');
     });
   } else {
     me = null;
