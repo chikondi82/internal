@@ -703,7 +703,7 @@ function openSubgroup(channelId, subgroupId) {
     msgUnsub = base.collection('subgroups').doc(subgroupId).collection('messages')
       .orderBy('createdAt', 'asc').onSnapshot(function (snap) {
         area.innerHTML = channelIntroHTML({ name: group.name, description: group.description || 'Work group in #' + channel.name });
-        snap.forEach(function (d) { addMsg(d.data(), area, 'channel'); });
+        snap.forEach(function (d) { addMsg(d.data(), area, 'channel', d.ref); });
         area.scrollTop = area.scrollHeight;
       }, function (e) { handleErr(e, 'Could not load work group messages.'); });
   }).catch(function (e) { handleErr(e, 'Could not open work group.'); });
@@ -812,7 +812,7 @@ function _realOpenChannel(cid, cname, cdesc) {
     .collection('messages').orderBy('createdAt', 'asc')
     .onSnapshot(function (snap) {
       area.innerHTML = channelIntroHTML(c);
-      snap.forEach(function (d) { addMsg(d.data(), area, 'channel'); });
+      snap.forEach(function (d) { addMsg(d.data(), area, 'channel', d.ref); });
       area.scrollTop = area.scrollHeight;
     }, function (e) { handleErr(e, 'Could not load channel messages.'); });
 }
@@ -902,7 +902,7 @@ function dmIntroHTML(name, uObj) {
     + '</div><div class="dpill">Today</div>';
 }
 
-function addMsg(data, area, mode) {
+function addMsg(data, area, mode, messageRef) {
   var isMe = data.senderUid === me.uid;
   var ts = data.createdAt ? data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'now';
   var cached = usersCache.find(function (u) { return u.uid === data.senderUid; });
@@ -961,7 +961,28 @@ function addMsg(data, area, mode) {
     + '<div class="bt">' + formatMsg(data.text) + '</div>'
     + (mode === 'dm' ? '<div class="btime">' + ts + '</div>' : '')
     + '</div>';
+  if (mode === 'channel' && isMe && messageRef) {
+    var deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'msg-delete-btn';
+    deleteButton.textContent = 'Delete';
+    deleteButton.setAttribute('aria-label', 'Delete your message');
+    deleteButton.addEventListener('click', function () { deleteChannelMessage(messageRef, deleteButton); });
+    d.querySelector('.bbl').appendChild(deleteButton);
+  }
   area.appendChild(d);
+}
+
+function deleteChannelMessage(messageRef, button) {
+  if (!messageRef || !confirm('Delete this message from the channel? This cannot be undone.')) return;
+  if (button) button.disabled = true;
+  messageRef.delete().then(function () {
+    toast('Message deleted.', 'success');
+  }).catch(function (e) {
+    handleErr(e, 'Could not delete this message. You can delete only messages you wrote.');
+  }).then(function () {
+    if (button) button.disabled = false;
+  });
 }
 
 function formatMsg(t) {

@@ -1330,6 +1330,28 @@ h1 {
   text-align: right;
 }
 
+.msg-delete-btn {
+  display: block;
+  margin: 6px 0 0 auto;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #fca5a5;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.msg-delete-btn:hover {
+  color: #fecaca;
+  text-decoration: underline;
+}
+
+.msg-delete-btn:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
 .ailbl {
   display: inline-flex;
   align-items: center;
