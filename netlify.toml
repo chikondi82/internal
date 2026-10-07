@@ -1,0 +1,5 @@
+[[redirects]]
+  from = "/api/ai/assistant"
+  to = "https://internal-uwi1.onrender.com/api/ai/assistant"
+  status = 200
+  force = true
