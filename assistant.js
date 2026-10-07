@@ -292,7 +292,8 @@ function assistantRender() {
     document.getElementById('workspace-ai-send').disabled = workspaceAssistant.busy || !this.value.trim();
   });
   document.getElementById('workspace-ai-input').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing
+      && !window.matchMedia('(max-width: 768px)').matches) {
       event.preventDefault();
       assistantAsk();
     }

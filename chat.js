@@ -966,7 +966,8 @@ function getComposerText() {
 }
 
 function handleComposerKeydown(event) {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing
+    && !window.matchMedia('(max-width: 768px)').matches) {
     event.preventDefault(); sendMsg();
   }
 }
