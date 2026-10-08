@@ -1074,7 +1074,19 @@ function getWorkspaceDmAccess(action, payload) {
             }
             throw new Error('The direct-message access service returned an invalid response (HTTP ' + response.status + ').');
           }
-          if (!response.ok) throw new Error(result.error || 'Could not process the direct message request.');
+          if (!result || typeof result !== 'object') result = {};
+          if (!response.ok) {
+            var retryableGateway = response.status === 502 || response.status === 504
+              || (response.status === 503 && !result.error);
+            if (action === 'access' && attempt < accessRetryDelays.length && retryableGateway) {
+              return retryAccess(attempt);
+            }
+            if (result.error) throw new Error(result.error);
+            if ([502, 503, 504].indexOf(response.status) !== -1) {
+              throw new Error('The direct-message service is still unavailable after several attempts (HTTP ' + response.status + '). Try again shortly.');
+            }
+            throw new Error('Could not process the direct message request (HTTP ' + response.status + ').');
+          }
           return result;
         });
       }, function (error) {
