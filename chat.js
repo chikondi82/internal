@@ -1,4 +1,4 @@
-var ac = null, msgUnsub = null, usersUnsub = null, meDocUnsub = null, dmRequestsUnsub = null, dmRequestUnsub = null, dmAccessCheckId = 0, dmRequestsCache = [], dmPermissionPrompt = null, usersCache = [], channelsCache = [], myProfile = {};
+var ac = null, msgUnsub = null, usersUnsub = null, meDocUnsub = null, dmRequestsUnsub = null, dmRequestUnsub = null, dmAccessCheckId = 0, dmRequestsCache = [], dmPermissionPrompt = null, dmExceptionUids = [], dmExceptionConfigLoaded = false, dmExceptionConfigPromise = null, usersCache = [], channelsCache = [], myProfile = {};
 var TOTAL_USERS = 0;
 var SECT_OPEN = { ch: true, dm: true };
 var DEFAULT_CHANNELS = [
@@ -915,20 +915,38 @@ function openChat(uid, name, color, ini) {
   if (dmRequestUnsub) { try { dmRequestUnsub(); } catch (e) {} dmRequestUnsub = null; }
   var convId = cid(me.uid, uid), area = G('msgs');
   var accessCheckId = ++dmAccessCheckId;
-  if (currentUserIsAdmin()) {
-    loadDmMessages(uid, liveName, u, convId);
-    return;
-  }
   ac.dmAllowed = false;
   ac.dmAccessStatus = 'checking';
   ac.dmSendWhenAllowed = false;
   setDmComposerVisible(true);
   area.innerHTML = dmIntroHTML(liveName, u);
+  if (currentUserIsAdmin() || isDmAccessException(me.uid)) {
+    loadDmMessages(uid, liveName, u, convId);
+    return;
+  }
+  if (!dmExceptionConfigLoaded) {
+    loadDmAccessExceptions().then(function () {
+      if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid) return;
+      if (currentUserIsAdmin() || isDmAccessException(me.uid)) {
+        var sendWhenAllowed = ac.dmSendWhenAllowed === true;
+        loadDmMessages(uid, liveName, u, convId);
+        if (sendWhenAllowed) sendMsg();
+        return;
+      }
+      checkDmAccessForChat(uid, liveName, u, convId, accessCheckId);
+    });
+    return;
+  }
+  checkDmAccessForChat(uid, liveName, u, convId, accessCheckId);
+}
+
+function checkDmAccessForChat(uid, liveName, user, convId, accessCheckId) {
+  var area = G('msgs');
   getWorkspaceDmAccess('access', { recipientUid: uid }).then(function (access) {
     if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid) return;
     if (access.status === 'allowed') {
       var sendWhenAllowed = ac.dmSendWhenAllowed === true;
-      loadDmMessages(uid, liveName, u, convId);
+      loadDmMessages(uid, liveName, user, convId);
       if (sendWhenAllowed) sendMsg();
       return;
     }
@@ -936,7 +954,7 @@ function openChat(uid, name, color, ini) {
     ac.dmSendWhenAllowed = false;
     if (access.status === 'request-required') {
       G('chstat').textContent = 'Permission required';
-      area.innerHTML = dmIntroHTML(liveName, u);
+      area.innerHTML = dmIntroHTML(liveName, user);
       handleDmComposerInput();
     } else {
       G('chstat').textContent = 'Message request';
@@ -953,6 +971,33 @@ function openChat(uid, name, color, ini) {
     G('chstat').textContent = 'Access check failed';
     showDmAccessCard('error', uid, error.message);
   });
+}
+
+function loadDmAccessExceptions() {
+  if (dmExceptionConfigPromise) return dmExceptionConfigPromise;
+  if (!me || !me.uid) return Promise.resolve([]);
+  var uid = me.uid;
+  dmExceptionConfigPromise = db.collection('workspaceConfig').doc('dmAccessExceptions').get()
+    .then(function (doc) {
+      if (me && me.uid === uid) {
+        var config = doc.exists ? (doc.data() || {}) : {};
+        dmExceptionUids = Array.isArray(config.uids) ? config.uids : [];
+        dmExceptionConfigLoaded = true;
+      }
+      return dmExceptionUids;
+    }).catch(function (error) {
+      console.warn('Trusted direct-message accounts could not be loaded:', error);
+      if (me && me.uid === uid) {
+        dmExceptionUids = [];
+        dmExceptionConfigLoaded = true;
+      }
+      return dmExceptionUids;
+    });
+  return dmExceptionConfigPromise;
+}
+
+function isDmAccessException(uid) {
+  return !!uid && dmExceptionUids.indexOf(uid) !== -1;
 }
 
 function loadDmMessages(uid, liveName, user, convId) {
@@ -1500,6 +1545,10 @@ document.addEventListener('workspace-role-changed', function (event) {
 auth.onAuthStateChanged(function (user) {
   if (user) {
     me = user;
+    dmExceptionUids = [];
+    dmExceptionConfigLoaded = false;
+    dmExceptionConfigPromise = null;
+    loadDmAccessExceptions();
     myProfile = {};
     G('dash').style.display = 'flex';
     var uav = G('uav');
@@ -1532,6 +1581,9 @@ auth.onAuthStateChanged(function (user) {
     });
   } else {
     me = null;
+    dmExceptionUids = [];
+    dmExceptionConfigLoaded = false;
+    dmExceptionConfigPromise = null;
     if (meDocUnsub) { try { meDocUnsub(); } catch (e) {} }
     if (usersUnsub) { try { usersUnsub(); } catch (e) {} }
     if (dmRequestsUnsub) { try { dmRequestsUnsub(); } catch (e) {} dmRequestsUnsub = null; }
