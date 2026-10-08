@@ -13,6 +13,45 @@ service cloud.firestore {
                 && get(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true));
     }
 
+    function isDmException(userId) {
+      return exists(/databases/$(database)/documents/workspaceConfig/dmAccessExceptions)
+        && userId in get(/databases/$(database)/documents/workspaceConfig/dmAccessExceptions).data.uids;
+    }
+
+    function hasSameDmGroup(peerUid) {
+      let myAssignment = /databases/$(database)/documents/orgAssignments/$(request.auth.uid);
+      let peerAssignment = /databases/$(database)/documents/orgAssignments/$(peerUid);
+      return request.auth != null
+        && exists(myAssignment)
+        && exists(peerAssignment)
+        && get(myAssignment).data.groupId is string
+        && get(myAssignment).data.groupId.size() > 0
+        && get(myAssignment).data.groupId == get(peerAssignment).data.groupId;
+    }
+
+    function otherDmParticipant(participants) {
+      return participants[0] == request.auth.uid ? participants[1] : participants[0];
+    }
+
+    function hasAcceptedDmRequest(convId, participants) {
+      let requestPath = /databases/$(database)/documents/dmRequests/$(convId);
+      return exists(requestPath)
+        && get(requestPath).data.status == 'accepted'
+        && get(requestPath).data.senderUid in participants
+        && get(requestPath).data.recipientUid in participants;
+    }
+
+    function canUseDirectMessage(convId) {
+      let participants = convId.split('_');
+      return request.auth != null
+        && participants.size() == 2
+        && request.auth.uid in participants
+        && (isAdmin()
+            || isDmException(request.auth.uid)
+            || hasSameDmGroup(otherDmParticipant(participants))
+            || hasAcceptedDmRequest(convId, participants));
+    }
+
     function canReadInternReport(report) {
       return request.auth != null
         && (isAdmin()
@@ -57,17 +96,17 @@ service cloud.firestore {
     }
 
     match /conversations/{convId} {
-      allow read, create, delete: if request.auth != null
-        && (request.auth.uid in convId.split('_')
-            || request.auth.token.email == 'chikondigahimbare@gmail.com');
+      allow read, create, delete: if canUseDirectMessage(convId);
     }
     match /conversations/{convId}/messages/{msgId} {
-      allow read, create: if request.auth != null
-        && (request.auth.uid in convId.split('_')
-            || request.auth.token.email == 'chikondigahimbare@gmail.com');
-      allow delete: if request.auth != null
-        && (request.auth.uid in convId.split('_')
-            || request.auth.token.email == 'chikondigahimbare@gmail.com');
+      allow read, create, delete: if canUseDirectMessage(convId);
+    }
+
+    match /dmRequests/{convId} {
+      allow read: if request.auth != null
+        && (resource.data.senderUid == request.auth.uid
+            || resource.data.recipientUid == request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     match /groups/{groupId}/messages/{msgId} {
@@ -85,9 +124,15 @@ service cloud.firestore {
     match /workspaceConfig/{configId} {
       allow read: if request.auth != null;
       allow create, update: if isSuperAdmin()
-        && configId == 'founder'
-        && request.resource.data.uid == request.auth.uid;
-      allow delete: if isSuperAdmin() && configId == 'founder';
+        && ((configId == 'founder'
+             && request.resource.data.uid == request.auth.uid)
+            || (configId == 'dmAccessExceptions'
+                && request.resource.data.uids is list
+                && request.resource.data.uids.size() == 6
+                && request.resource.data.accountUids is map
+                && request.resource.data.accountUids.size() == 6
+                && request.resource.data.updatedBy == request.auth.uid));
+      allow delete: if isSuperAdmin() && configId in ['founder', 'dmAccessExceptions'];
     }
 
     match /orgGroups/{groupId} {

@@ -8,6 +8,7 @@
   <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="reports.css" />
+  <link rel="stylesheet" href="visibility.css" />
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -81,6 +82,12 @@
       </form>
     </section>
 
+    <section class="report-panel" id="dm-exceptions-panel" style="display:none">
+      <div class="report-panel-heading"><div><span class="reports-kicker">DIRECT MESSAGE ACCESS</span><h2>Trusted DM exceptions</h2><p>Confirm the existing account for each listed person. Confirmed accounts can start DMs with any member without a request.</p></div></div>
+      <div id="dm-exceptions-list" class="dm-exceptions-list"></div>
+      <button class="btn" id="dm-exceptions-save" type="button">Save trusted accounts</button>
+    </section>
+
     <section class="report-panel" id="admins-panel" style="display:none">
       <div class="report-panel-heading"><div><span class="reports-kicker">FOUNDER CONTROLS</span><h2>Workspace administrators</h2><p>You remain the Super Admin. Delegated admins cannot grant or revoke admin access.</p></div></div>
       <form id="admin-form" class="admin-grant-form"><label>Choose a member<select id="admin-user" required></select></label><button class="btn" type="submit">Grant admin access</button></form>
@@ -96,5 +103,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js" referrerpolicy="no-referrer"></script>
   <script src="reports.js"></script>
   <script src="admin-users.js"></script>
+  <script src="visibility-toggle.js"></script>
 </body>
 </html>

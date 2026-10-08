@@ -9,6 +9,15 @@ var myReportsUnsub = null;
 var reviewReportsUnsub = null;
 var myAssignmentUnsub = null;
 var activeReportPreviewUrl = '';
+var dmExceptionConfig = null;
+var DM_TRUSTED_ACCOUNT_TARGETS = [
+  { key: 'ftaw-welu', label: 'Ftaw Welu', name: 'Ftaw Welu' },
+  { key: 'gilbert-ndayishimiye', label: 'Gilbert Ndayishimiye', name: 'Gilbert Ndayishimiye' },
+  { key: 'onesmas-kipkurui', label: 'Onesmas Kipkurui', name: 'Onesmas Kipkurui' },
+  { key: 'alexis-email', label: 'alexisntakarutimana8@gmail.com', email: 'alexisntakarutimana8@gmail.com' },
+  { key: 'simon-pierre-gahimbare', label: 'Simon Pierre Gahimbare', name: 'Simon Pierre Gahimbare' },
+  { key: 'steve-kwizera', label: 'Steve Kwizera', name: 'Steve Kwizera' }
+];
 
 auth.onAuthStateChanged(function (user) {
   me = user;
@@ -39,6 +48,7 @@ function initReportsWorkspace() {
   G('reports-app').style.display = 'grid';
   if (currentUserIsAdmin()) G('team-panel').style.display = '';
   if (currentUserIsSuperAdmin()) G('admins-panel').style.display = '';
+  if (currentUserIsSuperAdmin()) G('dm-exceptions-panel').style.display = '';
   if (currentUserIsSuperAdmin()) {
     db.collection('workspaceConfig').doc('founder').set({ uid: reportUser.uid, email: reportUser.email || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
       .catch(function (e) { console.warn('Founder settings could not be initialized:', e); });
@@ -54,6 +64,7 @@ function bindReportForms() {
   G('report-files').onchange = renderSelectedReportFiles;
   G('group-form').onsubmit = createOrgGroup;
   G('admin-form').onsubmit = grantWorkspaceAdmin;
+  G('dm-exceptions-save').onclick = saveDmExceptionAccounts;
 }
 
 function loadReportWorkspaceData() {
@@ -92,6 +103,7 @@ function loadReportWorkspaceData() {
     }
     renderAssignmentList();
     renderAdminUserOptions();
+    if (currentUserIsSuperAdmin()) loadDmExceptionConfig();
     renderReportRoute();
     loadReviewReports();
   }).catch(function (e) {
@@ -110,6 +122,80 @@ function reportAttr(value) {
 function reportUserLabel(uid) {
   var user = reportUsers.find(function (item) { return item.uid === uid; });
   return user ? reportDisplayName(user) : (uid === reportFounderUid ? 'Founder' : 'Workspace member');
+}
+
+function dmExceptionMatch(target, user) {
+  if (target.email) return String(user.email || '').toLowerCase() === target.email;
+  return normalizeName(reportDisplayName(user)) === normalizeName(target.name);
+}
+
+function renderDmExceptionAccounts() {
+  var target = G('dm-exceptions-list');
+  if (!target || !currentUserIsSuperAdmin()) return;
+  var saved = dmExceptionConfig && dmExceptionConfig.accountUids || {};
+  target.innerHTML = DM_TRUSTED_ACCOUNT_TARGETS.map(function (entry) {
+    var selectedUid = saved[entry.key] || '';
+    var matches = reportUsers.filter(function (user) { return dmExceptionMatch(entry, user); });
+    if (!selectedUid && matches.length === 1) selectedUid = matches[0].uid;
+    var options = '<option value="">Select the correct existing account</option>' + reportUsers.map(function (user) {
+      return '<option value="' + reportAttr(user.uid) + '" ' + (selectedUid === user.uid ? 'selected' : '') + '>'
+        + esc(reportDisplayName(user)) + ' · ' + esc(user.email || '') + '</option>';
+    }).join('');
+    var status = matches.length > 1 && !saved[entry.key]
+      ? 'Multiple exact name matches found; confirm the correct account.'
+      : (matches.length === 0 && !saved[entry.key] && !entry.email
+        ? 'No exact name match; choose the person’s existing account.'
+        : 'Confirm the matching existing account.');
+    return '<label class="dm-exception-row"><span><b>' + esc(entry.label) + '</b><small>' + esc(status) + '</small></span>'
+      + '<select data-dm-exception="' + esc(entry.key) + '" aria-label="Account for ' + esc(entry.label) + '">' + options + '</select></label>';
+  }).join('');
+}
+
+function loadDmExceptionConfig() {
+  if (!currentUserIsSuperAdmin()) return;
+  db.collection('workspaceConfig').doc('dmAccessExceptions').get().then(function (doc) {
+    dmExceptionConfig = doc.exists ? (doc.data() || {}) : null;
+    renderDmExceptionAccounts();
+  }).catch(function (e) {
+    handleErr(e, 'Could not load trusted direct-message accounts.');
+  });
+}
+
+function saveDmExceptionAccounts() {
+  if (!currentUserIsSuperAdmin()) {
+    toast('Only the Founder Super Admin can configure trusted direct-message accounts.');
+    return;
+  }
+  var selects = Array.prototype.slice.call(G('dm-exceptions-list').querySelectorAll('[data-dm-exception]'));
+  var accountUids = {};
+  selects.forEach(function (select) { accountUids[select.getAttribute('data-dm-exception')] = select.value; });
+  var uids = DM_TRUSTED_ACCOUNT_TARGETS.map(function (entry) { return accountUids[entry.key]; });
+  if (uids.some(function (uid) { return !uid; })) {
+    toast('Select an existing Firebase account for each listed person.');
+    return;
+  }
+  if (new Set(uids).size !== uids.length) {
+    toast('Each listed person must be matched to a different account.');
+    return;
+  }
+  var button = G('dm-exceptions-save');
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  db.collection('workspaceConfig').doc('dmAccessExceptions').set({
+    accountUids: accountUids,
+    uids: uids,
+    updatedBy: reportUser.uid,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function () {
+    dmExceptionConfig = { accountUids: accountUids, uids: uids };
+    toast('Trusted direct-message accounts saved.', 'success');
+    renderDmExceptionAccounts();
+  }).catch(function (e) {
+    handleErr(e, 'Could not save trusted direct-message accounts. Publish the updated Firestore rules first.');
+  }).then(function () {
+    button.disabled = false;
+    button.textContent = 'Save trusted accounts';
+  });
 }
 
 function renderReportRoute() {

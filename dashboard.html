@@ -24,6 +24,7 @@
   <meta name="twitter:image" content="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg"/>
 
   <link rel="stylesheet" href="styles.css"/>
+  <link rel="stylesheet" href="visibility.css"/>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -131,6 +132,7 @@
             <span class="sect-title">Direct Messages</span>
           </div>
           <div class="sect-body" id="dmlist"></div>
+          <div class="sect-body" id="dmrequestlist" aria-live="polite"></div>
         </div>
 
         <div class="me-footer">
@@ -215,5 +217,6 @@
   <script src="firebase-init.js"></script>
   <script src="chat.js"></script>
   <script src="assistant.js"></script>
+  <script src="visibility-toggle.js"></script>
 </body>
 </html>

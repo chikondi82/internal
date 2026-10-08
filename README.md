@@ -55,3 +55,20 @@ profiles in Firestore. Configure the Firebase Authentication password-reset
 email template and authorize the app's domain in Firebase Authentication so the
 setup link can return to the sign-in page. Delegated admins cannot grant admin
 access to invited users.
+
+Direct messages allow members assigned to the same organization group to start
+conversations. Starting a DM across groups sends a message request; the recipient
+must accept before either member can read or send messages. Members without a
+group assignment also need approval. Enabled workspace admins and the six
+Super-Admin-confirmed accounts in **Reports & evaluations → Trusted DM
+exceptions** can start conversations with any member. Existing DM histories
+are treated as already established. The user directory remains visible.
+
+This feature requires publishing the updated `firestore.rules` rules in the
+Firebase Console and deploying the updated `server.js` API plus the Netlify
+redirects. The Super Admin must select and save the six existing accounts in
+the trusted-exceptions panel before those accounts receive the exemption.
+
+All app pages include a high visibility toggle in the upper-right corner. Its
+setting is saved in the current browser's local storage and applies across the
+sign-in, dashboard, feed, and reports pages on that browser.

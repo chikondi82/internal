@@ -1,4 +1,4 @@
-var ac = null, msgUnsub = null, usersUnsub = null, meDocUnsub = null, usersCache = [], channelsCache = [], myProfile = {};
+var ac = null, msgUnsub = null, usersUnsub = null, meDocUnsub = null, dmRequestsUnsub = null, dmRequestUnsub = null, dmAccessCheckId = 0, dmRequestsCache = [], usersCache = [], channelsCache = [], myProfile = {};
 var TOTAL_USERS = 0;
 var SECT_OPEN = { ch: true, dm: true };
 var DEFAULT_CHANNELS = [
@@ -31,6 +31,8 @@ function doLogout() {
   if (msgUnsub) { try { msgUnsub(); } catch (e) {} }
   if (usersUnsub) { try { usersUnsub(); } catch (e) {} }
   if (meDocUnsub) { try { meDocUnsub(); } catch (e) {} }
+  if (dmRequestsUnsub) { try { dmRequestsUnsub(); } catch (e) {} }
+  if (dmRequestUnsub) { try { dmRequestUnsub(); } catch (e) {} }
   auth.signOut().then(function () {
     ac = null;
     usersCache = [];
@@ -96,6 +98,7 @@ function loadChannels() {
       seedChannels(); return;
     }
     renderSidebar();
+    renderDmRequests(dmRequestsCache);
     if (publicFixes.length) {
       Promise.all(publicFixes).then(function () { loadChannels(); })
         .catch(function (e) { handleErr(e, 'Could not restore built-in channels to public access.'); });
@@ -126,6 +129,7 @@ function loadUsers() {
       tch.innerHTML = '<span class="dot"></span> ' + TOTAL_USERS + ' member' + (TOTAL_USERS === 1 ? '' : 's');
     }
     renderSidebar();
+    renderDmRequests(dmRequestsCache);
     updateSuperAdminDmActions();
     if (ac && ac.type === 'dm') {
       var row = findDMRow(ac.uid);
@@ -185,6 +189,46 @@ function renderDMs() {
     return;
   }
   renderDMRows(el, usersCache);
+}
+
+function loadDmRequests() {
+  if (dmRequestsUnsub) { try { dmRequestsUnsub(); } catch (e) {} }
+  dmRequestsUnsub = db.collection('dmRequests').where('recipientUid', '==', me.uid)
+    .onSnapshot(function (snap) {
+      var incoming = snap.docs.map(function (doc) {
+        var request = doc.data() || {};
+        request.id = doc.id;
+        return request;
+      }).filter(function (request) { return request.status === 'pending'; });
+      dmRequestsCache = incoming;
+      renderDmRequests(dmRequestsCache);
+    }, function (error) {
+      console.error('Could not load incoming direct message requests:', error);
+      var list = G('dmrequestlist');
+      if (list) list.textContent = 'Could not load message requests.';
+    });
+}
+
+function renderDmRequests(requests) {
+  var list = G('dmrequestlist');
+  if (!list) return;
+  list.textContent = '';
+  if (!requests.length) return;
+  var heading = document.createElement('div');
+  heading.className = 'dm-request-heading';
+  heading.textContent = 'Message requests (' + requests.length + ')';
+  list.appendChild(heading);
+  requests.forEach(function (request) {
+    var sender = usersCache.find(function (user) { return user.uid === request.senderUid; }) || {};
+    var row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'row dm-request-row';
+    row.textContent = (sender.name || sender.email || 'Workspace user') + ' · Review';
+    row.addEventListener('click', function () {
+      openChat(request.senderUid, sender.name || sender.email || 'Workspace user', colFor(request.senderUid), inits(sender.name || sender.email || 'Workspace user'));
+    });
+    list.appendChild(row);
+  });
 }
 
 function findDMRow(uid) {
@@ -335,6 +379,7 @@ function toggleSect(k) {
   SECT_OPEN[k] = !SECT_OPEN[k];
   G('chev-' + k).textContent = SECT_OPEN[k] ? '▾' : '▸';
   G(k === 'ch' ? 'chlist' : 'dmlist').style.display = SECT_OPEN[k] ? '' : 'none';
+  if (k === 'dm') G('dmrequestlist').style.display = SECT_OPEN[k] ? '' : 'none';
 }
 
 function openModal() {
@@ -866,17 +911,156 @@ function openChat(uid, name, color, ini) {
   var backBtn = G('ch-group-back-btn'); if (backBtn) backBtn.style.display = 'none';
   G('cmp-hint').textContent = 'Message ' + liveName;
   if (msgUnsub) { try { msgUnsub(); } catch (e) {} }
+  if (dmRequestUnsub) { try { dmRequestUnsub(); } catch (e) {} dmRequestUnsub = null; }
   var convId = cid(me.uid, uid), area = G('msgs');
-  area.innerHTML = dmIntroHTML(liveName, u);
-  msgUnsub = db.collection('conversations').doc(convId)
-    .collection('messages').orderBy('createdAt', 'asc')
-    .onSnapshot(function (snap) {
-      var curU = usersCache.find(function (x) { return x.uid === uid; }) || u;
-      var curName = curU.name || curU.email || liveName;
-      area.innerHTML = dmIntroHTML(curName, curU);
-      snap.forEach(function (d) { addMsg(d.data(), area, 'dm'); });
-      area.scrollTop = area.scrollHeight;
-    }, function (e) { handleErr(e, 'Could not load DM messages.'); });
+  var accessCheckId = ++dmAccessCheckId;
+  ac.dmAllowed = false;
+  setDmComposerVisible(false);
+  showDmAccessCard('checking');
+  getWorkspaceDmAccess('access', { recipientUid: uid }).then(function (access) {
+    if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid) return;
+    if (access.status === 'allowed') {
+      ac.dmAllowed = true;
+      setDmComposerVisible(true);
+      G('chstat').textContent = 'Direct message';
+      area.innerHTML = dmIntroHTML(liveName, u);
+      msgUnsub = db.collection('conversations').doc(convId)
+        .collection('messages').orderBy('createdAt', 'asc')
+        .onSnapshot(function (snap) {
+          if (!ac || ac.type !== 'dm' || ac.uid !== uid) return;
+          var curU = usersCache.find(function (x) { return x.uid === uid; }) || u;
+          var curName = curU.name || curU.email || liveName;
+          area.innerHTML = dmIntroHTML(curName, curU);
+          snap.forEach(function (d) { addMsg(d.data(), area, 'dm'); });
+          area.scrollTop = area.scrollHeight;
+        }, function (e) { handleErr(e, 'Could not load DM messages.'); });
+      return;
+    }
+    setDmComposerVisible(false);
+    G('chstat').textContent = 'Message request';
+    showDmAccessCard(access.status, uid);
+    if (access.status === 'request-sent' || access.status === 'request-received') observeDmRequest(convId, uid, accessCheckId);
+  }).catch(function (error) {
+    if (accessCheckId !== dmAccessCheckId || !ac || ac.uid !== uid) return;
+    console.error('Could not check direct message access:', error);
+    setDmComposerVisible(false);
+    G('chstat').textContent = 'Access check failed';
+    showDmAccessCard('error', uid, error.message);
+  });
+}
+
+function setDmComposerVisible(visible) {
+  var input = G('minp');
+  var composer = input && input.closest ? input.closest('.composer') : null;
+  if (composer) composer.style.display = visible ? '' : 'none';
+}
+
+function getWorkspaceDmAccess(action, payload) {
+  return me.getIdToken().then(function (token) {
+    return fetch('/api/workspace/dm/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(payload)
+    });
+  }).then(function (response) {
+    return response.text().then(function (body) {
+      var result;
+      try {
+        result = body ? JSON.parse(body) : {};
+      } catch (error) {
+        if (response.status === 404) {
+          throw new Error('The direct-message access service is not deployed yet. Deploy the updated server and Netlify redirect, then try again.');
+        }
+        throw new Error('The direct-message access service returned an invalid response (HTTP ' + response.status + ').');
+      }
+      if (!response.ok) throw new Error(result.error || 'Could not process the direct message request.');
+      return result;
+    });
+  });
+}
+
+function showDmAccessCard(status, uid, errorText) {
+  var area = G('msgs');
+  var name = (usersCache.find(function (user) { return user.uid === uid; }) || {}).name || 'this member';
+  var title = document.createElement('h2');
+  var message = document.createElement('p');
+  var card = document.createElement('div');
+  card.className = 'ch-intro dm-access-card';
+  if (status === 'checking') {
+    title.textContent = 'Checking direct message access...';
+    message.textContent = 'Please wait.';
+  } else if (status === 'request-required') {
+    title.textContent = 'Request to message ' + name;
+    message.textContent = 'This member is outside your assigned Group. Send a message request to start a private conversation.';
+    addDmAccessButton(card, 'Send message request', function () { submitDmRequest(uid); });
+  } else if (status === 'request-sent') {
+    title.textContent = 'Message request sent';
+    message.textContent = 'Your request is waiting for ' + name + ' to accept.';
+  } else if (status === 'request-received') {
+    title.textContent = 'Message request from ' + name;
+    message.textContent = 'Accept to start a private conversation. Until then, messages are unavailable.';
+    addDmAccessButton(card, 'Accept request', function () { respondToDmRequest(uid, true); });
+    addDmAccessButton(card, 'Decline', function () { respondToDmRequest(uid, false); });
+  } else if (status === 'request-declined') {
+    title.textContent = 'Request declined';
+    message.textContent = name + ' declined your message request.';
+  } else if (status === 'request-declined-by-you') {
+    title.textContent = 'Request declined';
+    message.textContent = 'You declined ' + name + '’s message request.';
+  } else {
+    title.textContent = 'Could not check message access';
+    message.textContent = errorText || 'Please check your connection and try again.';
+    addDmAccessButton(card, 'Retry', function () { openChat(uid, name, colFor(uid), inits(name)); });
+  }
+  card.prepend(message);
+  card.prepend(title);
+  area.replaceChildren(card);
+}
+
+function addDmAccessButton(card, label, onClick) {
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn dm-access-action';
+  button.textContent = label;
+  button.addEventListener('click', onClick);
+  card.appendChild(button);
+}
+
+function observeDmRequest(convId, uid, accessCheckId) {
+  if (dmRequestUnsub) { try { dmRequestUnsub(); } catch (e) {} }
+  dmRequestUnsub = db.collection('dmRequests').doc(convId).onSnapshot(function (doc) {
+    if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid || !doc.exists) return;
+    var request = doc.data() || {};
+    if (request.status === 'accepted') openChat(uid, ac.name, ac.color, ac.ini);
+    else if (request.status === 'declined' && request.senderUid === me.uid) showDmAccessCard('request-declined', uid);
+  }, function (error) {
+    console.error('Could not monitor the direct message request:', error);
+  });
+}
+
+function submitDmRequest(uid) {
+  getWorkspaceDmAccess('request', { recipientUid: uid }).then(function () {
+    var user = usersCache.find(function (candidate) { return candidate.uid === uid; }) || {};
+    openChat(uid, user.name || user.email || 'Workspace user', colFor(uid), inits(user.name || user.email || 'Workspace user'));
+  }).catch(function (error) {
+    toast(error.message || 'Could not send the message request.');
+  });
+}
+
+function respondToDmRequest(senderUid, accept) {
+  getWorkspaceDmAccess('respond', { senderUid: senderUid, accept: accept }).then(function () {
+    var user = usersCache.find(function (candidate) { return candidate.uid === senderUid; }) || {};
+    if (accept) {
+      openChat(senderUid, user.name || user.email || 'Workspace user', colFor(senderUid), inits(user.name || user.email || 'Workspace user'));
+      toast('Message request accepted.', 'success');
+      return;
+    }
+    if (dmRequestUnsub) { try { dmRequestUnsub(); } catch (e) {} dmRequestUnsub = null; }
+    showDmAccessCard('request-declined-by-you', senderUid);
+    toast('Message request declined.', 'success');
+  }).catch(function (error) {
+    toast(error.message || 'Could not respond to the message request.');
+  });
 }
 
 function refreshMeCard() {
@@ -1131,6 +1315,10 @@ function handleComposerKeydown(event) {
 function sendMsg() {
   var inp = G('minp'), text = getComposerText().trim();
   if (!text || !ac) return;
+  if (ac.type === 'dm' && ac.dmAllowed !== true) {
+    toast('This direct message is not available until the recipient accepts your request.');
+    return;
+  }
   inp.innerHTML = ''; updSend();
   var payload = {
     text: text, senderUid: me.uid, senderName: myProfile.name || me.displayName || me.email,
@@ -1193,6 +1381,7 @@ auth.onAuthStateChanged(function (user) {
     }, function () {});
     loadChannels();
     loadUsers();
+    loadDmRequests();
     ensureUserProfile(user).catch(function (e) {
       console.error('Could not create the signed-in user profile:', e);
       toast('Could not save your user profile: ' + (e.message || e.code || 'unknown error'), 'error');
@@ -1206,6 +1395,9 @@ auth.onAuthStateChanged(function (user) {
     me = null;
     if (meDocUnsub) { try { meDocUnsub(); } catch (e) {} }
     if (usersUnsub) { try { usersUnsub(); } catch (e) {} }
+    if (dmRequestsUnsub) { try { dmRequestsUnsub(); } catch (e) {} dmRequestsUnsub = null; }
+    if (dmRequestUnsub) { try { dmRequestUnsub(); } catch (e) {} dmRequestUnsub = null; }
+    dmRequestsCache = [];
     window.location.href = 'index.html';
   }
 });

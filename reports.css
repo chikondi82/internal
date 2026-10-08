@@ -553,6 +553,28 @@
 
 .user-invite-form button { grid-column: 1 / -1; justify-self: start; }
 
+.dm-exceptions-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.dm-exception-row {
+  display: grid;
+  grid-template-columns: minmax(170px, .8fr) minmax(220px, 1.2fr);
+  align-items: center;
+  gap: 12px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .02);
+}
+
+.dm-exception-row > span { display: grid; gap: 4px; }
+.dm-exception-row b { color: #d9e5dc; font-size: 11px; }
+.dm-exception-row small { color: #87948b; font-size: 10px; }
+.dm-exception-row select { min-width: 0; padding: 9px; border: 1px solid rgba(255,255,255,.11); border-radius: 8px; background: #0b1114; color: #e4eee7; }
+
 .admin-list { display: grid; gap: 8px; }
 
 .admin-row {
@@ -622,6 +644,7 @@
   .report-form-footer .btn { width: 100%; }
   .group-create-form, .admin-grant-form, .user-invite-form { grid-template-columns: 1fr; }
   .group-create-form .btn, .admin-grant-form .btn, .user-invite-form .btn { width: 100%; }
+  .dm-exception-row { grid-template-columns: 1fr; }
   .assignment-row { grid-template-columns: 1fr; }
   .assignment-person { grid-column: auto; }
   .assignment-row .btn { width: 100%; }

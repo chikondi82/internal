@@ -4042,6 +4042,25 @@ table {
   cursor: pointer;
 }
 
+.dm-request-heading {
+  padding: 9px 8px 5px;
+  color: #e3c56a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.dm-request-row {
+  width: 100%;
+  color: #f0d982;
+  text-align: left;
+}
+
+.dm-access-card .dm-access-action {
+  min-height: 40px;
+  margin: 14px 5px 0;
+  padding: 9px 14px;
+}
+
 .workspace-ai-nav .hash {
   color: var(--brand-gold-light);
   font-size: 17px;

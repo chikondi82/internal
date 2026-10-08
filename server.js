@@ -102,6 +102,95 @@ async function verifyFirebaseIdToken(token) {
     return claims;
 }
 
+async function getDmRequestClaims(req, res, purpose) {
+    const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
+    if (!match) {
+        res.status(401).json({ error: `Sign in to ${purpose}.` });
+        return null;
+    }
+    try {
+        const claims = await verifyFirebaseIdToken(match[1]);
+        if (!claims) res.status(401).json({ error: 'Your sign-in has expired. Please sign in again.' });
+        return claims;
+    } catch (error) {
+        console.error(`Firebase token verification failed for ${purpose}:`, error);
+        res.status(503).json({ error: 'Could not verify your sign-in right now. Please try again.' });
+        return null;
+    }
+}
+
+function dmConversationId(firstUid, secondUid) {
+    return [firstUid, secondUid].sort().join('_');
+}
+
+async function isWorkspaceAdmin(firestore, claims) {
+    if (String(claims.email || '').toLowerCase() === SUPER_ADMIN_EMAIL) return true;
+    const role = await firestore.collection('workspaceAdmins').doc(claims.sub).get();
+    return role.exists && role.data().enabled === true;
+}
+
+async function grantDirectMessageAccess(firestore, convId, senderUid, recipientUid, source) {
+    await firestore.collection('dmRequests').doc(convId).set({
+        senderUid,
+        recipientUid,
+        status: 'accepted',
+        source,
+        acceptedAt: FieldValue.serverTimestamp()
+    });
+}
+
+async function getDirectMessageAccess(firestore, claims, recipientUid) {
+    const requesterUid = claims.sub;
+    const convId = dmConversationId(requesterUid, recipientUid);
+    const requestRef = firestore.collection('dmRequests').doc(convId);
+    const requestSnapshot = await requestRef.get();
+    const request = requestSnapshot.exists ? requestSnapshot.data() : null;
+    if (request && request.status === 'accepted') return { status: 'allowed', convId };
+
+    const exceptionsSnapshot = await firestore.collection('workspaceConfig').doc('dmAccessExceptions').get();
+    const exceptionUids = exceptionsSnapshot.exists && Array.isArray(exceptionsSnapshot.data().uids)
+        ? exceptionsSnapshot.data().uids
+        : [];
+    const [isAdmin, requesterAssignment, recipientAssignment] = await Promise.all([
+        isWorkspaceAdmin(firestore, claims),
+        firestore.collection('orgAssignments').doc(requesterUid).get(),
+        firestore.collection('orgAssignments').doc(recipientUid).get()
+    ]);
+    const isException = exceptionUids.includes(requesterUid);
+    const requesterGroup = requesterAssignment.exists ? requesterAssignment.data().groupId : null;
+    const recipientGroup = recipientAssignment.exists ? recipientAssignment.data().groupId : null;
+    const sameGroup = typeof requesterGroup === 'string' && requesterGroup.length > 0
+        && requesterGroup === recipientGroup;
+
+    if (isAdmin || isException || sameGroup) {
+        const source = isAdmin ? 'admin' : (isException ? 'exception' : 'same-group');
+        if (isAdmin || isException) {
+            await grantDirectMessageAccess(firestore, convId, requesterUid, recipientUid, source);
+        }
+        return { status: 'allowed', convId };
+    }
+
+    if (request && request.status === 'pending') {
+        return {
+            status: request.senderUid === requesterUid ? 'request-sent' : 'request-received',
+            convId,
+            senderUid: request.senderUid,
+            recipientUid: request.recipientUid
+        };
+    }
+    if (request && request.status === 'declined' && request.senderUid === requesterUid) {
+        return { status: 'request-declined', convId };
+    }
+
+    const previousMessages = await firestore.collection('conversations').doc(convId)
+        .collection('messages').limit(1).get();
+    if (!previousMessages.empty) {
+        await grantDirectMessageAccess(firestore, convId, requesterUid, recipientUid, 'existing-conversation');
+        return { status: 'allowed', convId };
+    }
+    return { status: 'request-required', convId };
+}
+
 app.post(['/api/workspace/users/sync', '/api/workspace/dm-directory/sync'], async (req, res) => {
     const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
     if (!match) return res.status(401).json({ error: 'Sign in to load the direct message directory.' });
@@ -156,6 +245,105 @@ app.post(['/api/workspace/users/sync', '/api/workspace/dm-directory/sync'], asyn
         return res.status(503).json({
             error: 'Could not load registered teammates. Configure Firebase Admin credentials for this server and try again.'
         });
+    }
+});
+
+app.post('/api/workspace/dm/access', async (req, res) => {
+    const claims = await getDmRequestClaims(req, res, 'check direct message access');
+    if (!claims) return;
+    const { recipientUid } = req.body || {};
+    if (typeof recipientUid !== 'string' || !recipientUid || recipientUid.length > 128 || recipientUid === claims.sub) {
+        return res.status(400).json({ error: 'Choose a valid workspace member.' });
+    }
+
+    try {
+        const { firestore } = getFirebaseAdminServices();
+        const recipient = await firestore.collection('users').doc(recipientUid).get();
+        if (!recipient.exists) return res.status(404).json({ error: 'That workspace member could not be found.' });
+        return res.json(await getDirectMessageAccess(firestore, claims, recipientUid));
+    } catch (error) {
+        console.error('Direct message access check failed:', error);
+        return res.status(503).json({ error: 'Could not check direct message access. Please try again.' });
+    }
+});
+
+app.post('/api/workspace/dm/request', async (req, res) => {
+    const claims = await getDmRequestClaims(req, res, 'request a direct message');
+    if (!claims) return;
+    const { recipientUid } = req.body || {};
+    if (typeof recipientUid !== 'string' || !recipientUid || recipientUid.length > 128 || recipientUid === claims.sub) {
+        return res.status(400).json({ error: 'Choose a valid workspace member.' });
+    }
+
+    try {
+        const { firestore } = getFirebaseAdminServices();
+        const recipient = await firestore.collection('users').doc(recipientUid).get();
+        if (!recipient.exists) return res.status(404).json({ error: 'That workspace member could not be found.' });
+        const access = await getDirectMessageAccess(firestore, claims, recipientUid);
+        if (access.status !== 'request-required') return res.json(access);
+
+        const requestRef = firestore.collection('dmRequests').doc(access.convId);
+        const result = await firestore.runTransaction(async (transaction) => {
+            const current = await transaction.get(requestRef);
+            const previous = current.exists ? current.data() : null;
+            if (previous && previous.status === 'accepted') return { status: 'allowed' };
+            if (previous && previous.status === 'pending') {
+                return { status: previous.senderUid === claims.sub ? 'request-sent' : 'request-received' };
+            }
+            if (previous && previous.status === 'declined' && previous.senderUid === claims.sub) {
+                return { status: 'request-declined' };
+            }
+            transaction.set(requestRef, {
+                senderUid: claims.sub,
+                recipientUid,
+                status: 'pending',
+                createdAt: FieldValue.serverTimestamp()
+            });
+            return { status: 'request-sent' };
+        });
+        return res.json({ ...result, convId: access.convId });
+    } catch (error) {
+        console.error('Direct message request failed:', error);
+        return res.status(503).json({ error: 'Could not send the message request. Please try again.' });
+    }
+});
+
+app.post('/api/workspace/dm/respond', async (req, res) => {
+    const claims = await getDmRequestClaims(req, res, 'respond to a direct message request');
+    if (!claims) return;
+    const { senderUid, accept } = req.body || {};
+    if (
+        typeof senderUid !== 'string' ||
+        !senderUid ||
+        senderUid.length > 128 ||
+        senderUid === claims.sub ||
+        typeof accept !== 'boolean'
+    ) {
+        return res.status(400).json({ error: 'Choose a valid message request response.' });
+    }
+
+    try {
+        const { firestore } = getFirebaseAdminServices();
+        const convId = dmConversationId(claims.sub, senderUid);
+        const requestRef = firestore.collection('dmRequests').doc(convId);
+        const result = await firestore.runTransaction(async (transaction) => {
+            const current = await transaction.get(requestRef);
+            if (!current.exists || current.data().status !== 'pending' || current.data().recipientUid !== claims.sub) {
+                return { status: 'stale' };
+            }
+            transaction.update(requestRef, {
+                status: accept ? 'accepted' : 'declined',
+                respondedAt: FieldValue.serverTimestamp()
+            });
+            return { status: accept ? 'accepted' : 'declined' };
+        });
+        if (result.status === 'stale') {
+            return res.status(409).json({ error: 'This message request is no longer pending. Refresh and try again.' });
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('Direct message request response failed:', error);
+        return res.status(503).json({ error: 'Could not respond to the message request. Please try again.' });
     }
 });
 
