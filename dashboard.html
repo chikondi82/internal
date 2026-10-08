@@ -201,7 +201,7 @@
                 <span class="ttip" title="List">≡</span>
               </div>
             </div>
-            <div class="cmp-inp" id="minp" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Write a message" data-placeholder="Write a message…" oninput="updSend()" onkeydown="handleComposerKeydown(event)"></div>
+            <div class="cmp-inp" id="minp" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Write a message" data-placeholder="Write a message…" oninput="handleDmComposerInput()" onkeydown="handleComposerKeydown(event)"></div>
             <div class="cmp-ftr">
               <span class="cmp-short"><b>Enter</b> to send · <b>Shift+Enter</b> for new line</span>
               <button class="sbtn off" id="sndbtn" onclick="sendMsg()">

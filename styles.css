@@ -4061,6 +4061,19 @@ table {
   padding: 9px 14px;
 }
 
+.dm-permission-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 18px 18px;
+}
+
+.dm-permission-actions .btn { min-height: 40px; }
+
+@media (max-width: 480px) {
+  .dm-permission-actions { flex-direction: column-reverse; }
+}
+
 .workspace-ai-nav .hash {
   color: var(--brand-gold-light);
   font-size: 17px;

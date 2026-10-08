@@ -1,4 +1,4 @@
-var ac = null, msgUnsub = null, usersUnsub = null, meDocUnsub = null, dmRequestsUnsub = null, dmRequestUnsub = null, dmAccessCheckId = 0, dmRequestsCache = [], usersCache = [], channelsCache = [], myProfile = {};
+var ac = null, msgUnsub = null, usersUnsub = null, meDocUnsub = null, dmRequestsUnsub = null, dmRequestUnsub = null, dmAccessCheckId = 0, dmRequestsCache = [], dmPermissionPrompt = null, usersCache = [], channelsCache = [], myProfile = {};
 var TOTAL_USERS = 0;
 var SECT_OPEN = { ch: true, dm: true };
 var DEFAULT_CHANNELS = [
@@ -872,6 +872,7 @@ function channelIntroHTML(c) {
 }
 
 function openChat(uid, name, color, ini) {
+  closeDmPermissionPrompt();
   toggleMobileMenu(false);
   var clearDmButton = G('ch-clear-dm-btn');
   if (clearDmButton) clearDmButton.style.display = 'none';
@@ -915,12 +916,14 @@ function openChat(uid, name, color, ini) {
   var convId = cid(me.uid, uid), area = G('msgs');
   var accessCheckId = ++dmAccessCheckId;
   ac.dmAllowed = false;
-  setDmComposerVisible(false);
+  ac.dmAccessStatus = 'checking';
+  setDmComposerVisible(true);
   area.innerHTML = dmIntroHTML(liveName, u);
   getWorkspaceDmAccess('access', { recipientUid: uid }).then(function (access) {
     if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid) return;
     if (access.status === 'allowed') {
       ac.dmAllowed = true;
+      ac.dmAccessStatus = 'allowed';
       setDmComposerVisible(true);
       G('chstat').textContent = 'Direct message';
       area.innerHTML = dmIntroHTML(liveName, u);
@@ -936,13 +939,21 @@ function openChat(uid, name, color, ini) {
         }, function (e) { handleErr(e, 'Could not load DM messages.'); });
       return;
     }
-    setDmComposerVisible(false);
-    G('chstat').textContent = 'Message request';
-    showDmAccessCard(access.status, uid);
-    if (access.status === 'request-sent' || access.status === 'request-received') observeDmRequest(convId, uid, accessCheckId);
+    ac.dmAccessStatus = access.status;
+    if (access.status === 'request-required') {
+      G('chstat').textContent = 'Permission required';
+      area.innerHTML = dmIntroHTML(liveName, u);
+      handleDmComposerInput();
+    } else {
+      G('chstat').textContent = 'Message request';
+      setDmComposerVisible(false);
+      showDmAccessCard(access.status, uid);
+      if (access.status === 'request-sent' || access.status === 'request-received') observeDmRequest(convId, uid, accessCheckId);
+    }
   }).catch(function (error) {
     if (accessCheckId !== dmAccessCheckId || !ac || ac.uid !== uid) return;
     console.error('Could not check direct message access:', error);
+    if (ac) ac.dmAccessStatus = 'error';
     setDmComposerVisible(false);
     G('chstat').textContent = 'Access check failed';
     showDmAccessCard('error', uid, error.message);
@@ -953,6 +964,77 @@ function setDmComposerVisible(visible) {
   var input = G('minp');
   var composer = input && input.closest ? input.closest('.composer') : null;
   if (composer) composer.style.display = visible ? '' : 'none';
+}
+
+function handleDmComposerInput() {
+  updSend();
+  if (!ac || ac.type !== 'dm' || ac.dmAllowed || !getComposerText().trim()) return;
+  if (ac.dmAccessStatus === 'request-required') showDmPermissionPrompt(ac.uid);
+}
+
+function showDmPermissionPrompt(uid) {
+  if (dmPermissionPrompt) return;
+  var user = usersCache.find(function (candidate) { return candidate.uid === uid; }) || {};
+  var name = user.name || user.email || 'this member';
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-mask';
+  overlay.setAttribute('role', 'presentation');
+
+  var card = document.createElement('section');
+  card.className = 'modal-card';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-modal', 'true');
+  card.setAttribute('aria-labelledby', 'dm-permission-title');
+
+  var heading = document.createElement('div');
+  heading.className = 'modal-hdr';
+  var title = document.createElement('span');
+  title.className = 'modal-title';
+  title.id = 'dm-permission-title';
+  title.textContent = 'Ask permission to continue with this chat';
+  heading.appendChild(title);
+
+  var body = document.createElement('div');
+  body.className = 'modal-body';
+  var message = document.createElement('p');
+  message.className = 'modal-sub';
+  message.textContent = name + ' must accept your request before you can send messages. Your draft will stay here.';
+  body.appendChild(message);
+
+  var actions = document.createElement('div');
+  actions.className = 'dm-permission-actions';
+  var requestButton = document.createElement('button');
+  requestButton.type = 'button';
+  requestButton.className = 'btn';
+  requestButton.textContent = 'Request permission';
+  requestButton.addEventListener('click', function () {
+    closeDmPermissionPrompt();
+    submitDmRequest(uid);
+  });
+  var cancelButton = document.createElement('button');
+  cancelButton.type = 'button';
+  cancelButton.className = 'btn';
+  cancelButton.textContent = 'Not now';
+  cancelButton.addEventListener('click', closeDmPermissionPrompt);
+  actions.appendChild(requestButton);
+  actions.appendChild(cancelButton);
+
+  card.appendChild(heading);
+  card.appendChild(body);
+  card.appendChild(actions);
+  overlay.appendChild(card);
+  overlay.addEventListener('click', function (event) {
+    if (event.target === overlay) closeDmPermissionPrompt();
+  });
+  document.body.appendChild(overlay);
+  dmPermissionPrompt = overlay;
+  requestButton.focus();
+}
+
+function closeDmPermissionPrompt() {
+  if (!dmPermissionPrompt) return;
+  if (dmPermissionPrompt.parentNode) dmPermissionPrompt.parentNode.removeChild(dmPermissionPrompt);
+  dmPermissionPrompt = null;
 }
 
 function getWorkspaceDmAccess(action, payload) {
@@ -1022,8 +1104,8 @@ function showDmAccessCard(status, uid, errorText) {
   } else if (status === 'request-received') {
     title.textContent = 'Message request from ' + name;
     message.textContent = 'Accept to start a private conversation. Until then, messages are unavailable.';
-    addDmAccessButton(card, 'Accept request', function () { respondToDmRequest(uid, true); });
-    addDmAccessButton(card, 'Decline', function () { respondToDmRequest(uid, false); });
+    addDmAccessButton(card, 'Accept', function () { respondToDmRequest(uid, true); });
+    addDmAccessButton(card, 'Deny', function () { respondToDmRequest(uid, false); });
   } else if (status === 'request-declined') {
     title.textContent = 'Request declined';
     message.textContent = name + ' declined your message request.';
@@ -1339,7 +1421,7 @@ function sendMsg() {
   var inp = G('minp'), text = getComposerText().trim();
   if (!text || !ac) return;
   if (ac.type === 'dm' && ac.dmAllowed !== true) {
-    toast('This direct message is not available until the recipient accepts your request.');
+    handleDmComposerInput();
     return;
   }
   inp.innerHTML = ''; updSend();
