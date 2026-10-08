@@ -11,7 +11,7 @@
     enabled = value;
     document.documentElement.classList.toggle('high-visibility', enabled);
     toggle.setAttribute('aria-pressed', String(enabled));
-    toggle.textContent = 'High visibility: ' + (enabled ? 'On' : 'Off');
+    toggle.textContent = enabled ? 'On' : 'Off';
     try {
       localStorage.setItem(storageKey, enabled ? 'on' : 'off');
     } catch (error) {
