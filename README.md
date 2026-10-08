@@ -45,3 +45,13 @@ environment secret (for example, in Render); do not put the key in browser code
 or commit it. The service account needs Firebase Authentication user-listing
 access and Firestore write access. Local development may instead use Application
 Default Credentials. The administrator's Firebase email must be verified.
+
+Workspace admins can add regular users from **Reports & evaluations → Add a
+workspace user**. The server creates the account with a random, undisclosed
+password; Firebase Authentication then emails the user a password-reset link to
+choose their own password. Admin invitations require verified admin accounts
+and Firebase Admin access to create/delete Authentication users and write user
+profiles in Firestore. Configure the Firebase Authentication password-reset
+email template and authorize the app's domain in Firebase Authentication so the
+setup link can return to the sign-in page. Delegated admins cannot grant admin
+access to invited users.

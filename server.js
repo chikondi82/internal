@@ -9,6 +9,7 @@ require('dotenv').config();
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const FIREBASE_PROJECT_ID = 'whatsapp-internal-4a29f';
+const SUPER_ADMIN_EMAIL = 'chikondigahimbare@gmail.com';
 const firebaseCertsUrl = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 let firebaseSigningKeys = null;
 let firebaseKeysExpireAt = 0;
@@ -154,6 +155,88 @@ app.post(['/api/workspace/users/sync', '/api/workspace/dm-directory/sync'], asyn
         console.error('Direct message directory sync failed:', error);
         return res.status(503).json({
             error: 'Could not load registered teammates. Configure Firebase Admin credentials for this server and try again.'
+        });
+    }
+});
+
+app.post('/api/workspace/users/invite', async (req, res) => {
+    const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
+    if (!match) return res.status(401).json({ error: 'Sign in to invite a workspace user.' });
+
+    let claims;
+    try {
+        claims = await verifyFirebaseIdToken(match[1]);
+    } catch (error) {
+        console.error('Firebase token verification failed for user invitation:', error);
+        return res.status(503).json({ error: 'Could not verify your sign-in right now. Please try again.' });
+    }
+    if (!claims) return res.status(401).json({ error: 'Your sign-in has expired. Please sign in again.' });
+    if (claims.email_verified !== true) {
+        return res.status(403).json({ error: 'Verify your email before inviting workspace users.' });
+    }
+
+    const { name, email } = req.body || {};
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (
+        !normalizedName ||
+        normalizedName.length > 100 ||
+        normalizedEmail.length > 254 ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
+    ) {
+        return res.status(400).json({ error: 'Enter a valid name and email address.' });
+    }
+
+    let createdUser;
+    let createdUserProfile;
+    try {
+        const { auth: adminAuth, firestore } = getFirebaseAdminServices();
+        const isSuperAdmin = String(claims.email || '').toLowerCase() === SUPER_ADMIN_EMAIL;
+        if (!isSuperAdmin) {
+            const adminRole = await firestore.collection('workspaceAdmins').doc(claims.sub).get();
+            if (!adminRole.exists || adminRole.data().enabled !== true) {
+                return res.status(403).json({ error: 'Only workspace admins can invite users.' });
+            }
+        }
+
+        createdUser = await adminAuth.createUser({
+            email: normalizedEmail,
+            displayName: normalizedName,
+            password: crypto.randomBytes(32).toString('base64url')
+        });
+        createdUserProfile = firestore.collection('users').doc(createdUser.uid);
+        await createdUserProfile.set({
+            uid: createdUser.uid,
+            email: normalizedEmail,
+            name: normalizedName,
+            invited: true,
+            invitedBy: claims.sub,
+            createdAt: FieldValue.serverTimestamp()
+        });
+
+        return res.status(201).json({ uid: createdUser.uid, email: normalizedEmail });
+    } catch (error) {
+        if (createdUserProfile) {
+            try {
+                await createdUserProfile.delete();
+            } catch (cleanupError) {
+                console.error('Could not roll back an incomplete user profile:', cleanupError);
+            }
+        }
+        if (createdUser) {
+            try {
+                const { auth: adminAuth } = getFirebaseAdminServices();
+                await adminAuth.deleteUser(createdUser.uid);
+            } catch (cleanupError) {
+                console.error('Could not roll back an incomplete user invitation:', cleanupError);
+            }
+        }
+        if (error.code === 'auth/email-already-exists') {
+            return res.status(409).json({ error: 'An account already exists for that email address.' });
+        }
+        console.error('Workspace user invitation failed:', error);
+        return res.status(503).json({
+            error: 'Could not create the workspace account. Check the server Firebase Admin credentials and try again.'
         });
     }
 });

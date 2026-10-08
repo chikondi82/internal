@@ -72,6 +72,15 @@
       <div id="assignment-list" class="assignment-list"><div class="report-loading">Loading team members…</div></div>
     </section>
 
+    <section class="report-panel" id="user-invite-panel" style="display:none">
+      <div class="report-panel-heading"><div><span class="reports-kicker">USER ACCESS</span><h2>Add a workspace user</h2><p>New users receive an email link to set their password. Invitations grant regular user access only.</p></div></div>
+      <form id="user-invite-form" class="user-invite-form">
+        <label>Full name<input id="invite-user-name" maxlength="100" required autocomplete="name" /></label>
+        <label>Email address<input id="invite-user-email" type="email" maxlength="254" required autocomplete="email" /></label>
+        <button class="btn" id="invite-user-submit" type="submit">Add user and send email</button>
+      </form>
+    </section>
+
     <section class="report-panel" id="admins-panel" style="display:none">
       <div class="report-panel-heading"><div><span class="reports-kicker">FOUNDER CONTROLS</span><h2>Workspace administrators</h2><p>You remain the Super Admin. Delegated admins cannot grant or revoke admin access.</p></div></div>
       <form id="admin-form" class="admin-grant-form"><label>Choose a member<select id="admin-user" required></select></label><button class="btn" type="submit">Grant admin access</button></form>
@@ -86,5 +95,6 @@
   <script src="firebase-init.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js" referrerpolicy="no-referrer"></script>
   <script src="reports.js"></script>
+  <script src="admin-users.js"></script>
 </body>
 </html>

@@ -198,7 +198,8 @@
 
 .report-form,
 .group-create-form,
-.admin-grant-form {
+.admin-grant-form,
+.user-invite-form {
   display: grid;
   gap: 13px;
 }
@@ -206,6 +207,7 @@
 .report-form label,
 .group-create-form label,
 .admin-grant-form label,
+.user-invite-form label,
 .assignment-row label,
 .report-review-form label {
   display: grid;
@@ -220,6 +222,7 @@
 .report-form input[type="file"],
 .group-create-form input,
 .admin-grant-form select,
+.user-invite-form input,
 .assignment-row input,
 .assignment-row select,
 .report-review-form textarea,
@@ -543,6 +546,13 @@
   margin-bottom: 14px;
 }
 
+.user-invite-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.user-invite-form button { grid-column: 1 / -1; justify-self: start; }
+
 .admin-list { display: grid; gap: 8px; }
 
 .admin-row {
@@ -610,8 +620,8 @@
   .report-form-grid, .report-details { grid-template-columns: 1fr; }
   .report-form-footer { align-items: stretch; flex-direction: column; }
   .report-form-footer .btn { width: 100%; }
-  .group-create-form, .admin-grant-form { grid-template-columns: 1fr; }
-  .group-create-form .btn, .admin-grant-form .btn { width: 100%; }
+  .group-create-form, .admin-grant-form, .user-invite-form { grid-template-columns: 1fr; }
+  .group-create-form .btn, .admin-grant-form .btn, .user-invite-form .btn { width: 100%; }
   .assignment-row { grid-template-columns: 1fr; }
   .assignment-person { grid-column: auto; }
   .assignment-row .btn { width: 100%; }
