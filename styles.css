@@ -5006,3 +5006,72 @@ canvas {
     flex-direction: column;
   }
 }
+.user-management-card {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(82vh, 760px);
+  overflow: auto;
+}
+
+#user-management-open {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.user-management-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.user-management-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid rgba(139, 148, 158, .2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.user-management-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-management-identity strong,
+.user-management-identity span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.user-management-identity strong { color: #e6edf3; font-size: 13px; }
+.user-management-identity span { margin-top: 3px; color: #8b949e; font-size: 11px; }
+
+.user-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.user-management-actions button {
+  padding: 6px 8px;
+  border: 1px solid rgba(139, 148, 158, .28);
+  border-radius: 7px;
+  background: #171d24;
+  color: #d8e1e8;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.user-management-actions button.danger { color: #ff9c9c; border-color: rgba(255, 110, 110, .35); }
+.user-management-actions button:disabled { opacity: .55; cursor: wait; }
+
+@media (max-width: 600px) {
+  .user-management-row { align-items: flex-start; flex-direction: column; }
+  .user-management-actions { justify-content: flex-start; }
+}

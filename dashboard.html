@@ -60,6 +60,19 @@
     </div>
   </div>
 
+  <div id="user-management-modal" class="modal-mask" style="display:none" role="dialog" aria-modal="true" aria-labelledby="user-management-title">
+    <div class="modal-card user-management-card">
+      <div class="modal-hdr">
+        <span class="modal-title" id="user-management-title">Manage accounts</span>
+        <button class="ibtn" type="button" onclick="closeUserManagement()" aria-label="Close account management">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">Disable access, revoke active sessions, or permanently delete a workspace account.</p>
+        <div id="user-management-list" class="user-management-list" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="dash">
     <button class="mobile-menu-toggle" id="mobile-menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-navigation" onclick="toggleMobileMenu()">
       <span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -92,6 +105,10 @@
             <span class="sect-title">Workspace</span>
           </div>
           <div class="sect-body">
+            <button class="row" id="user-management-open" type="button" style="display:none" onclick="openUserManagement()">
+              <span class="hash" aria-hidden="true">⚙</span>
+              <span class="rname">Manage accounts</span>
+            </button>
             <div class="row on" onclick="window.location.href='dashboard.html'">
               <span class="hash" style="display:flex;align-items:center;justify-content:center">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -216,6 +233,7 @@
 
   <script src="firebase-init.js"></script>
   <script src="chat.js"></script>
+  <script src="admin-users.js"></script>
   <script src="assistant.js"></script>
   <script src="visibility-toggle.js"></script>
 </body>

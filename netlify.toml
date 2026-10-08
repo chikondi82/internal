@@ -5,6 +5,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/workspace/users/manage"
+  to = "https://internal-uwi1.onrender.com/api/workspace/users/manage"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/workspace/users/invite"
   to = "https://internal-uwi1.onrender.com/api/workspace/users/invite"
   status = 200

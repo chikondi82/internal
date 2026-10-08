@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const { applicationDefault, cert, getApps, initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
@@ -18,10 +19,23 @@ const aiRequestWindows = new Map();
 function getFirebaseAdminServices() {
     let adminApp = getApps().find((candidate) => candidate.name === 'workspace-user-sync');
     if (!adminApp) {
-        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-        const credential = serviceAccountJson
-            ? cert(JSON.parse(serviceAccountJson))
-            : applicationDefault();
+        let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+        if (!serviceAccountJson) {
+            const secretFilePath = process.env.FIREBASE_SERVICE_ACCOUNT_FILE
+                || ['/etc/secrets/FIREBASE_SERVICE_ACCOUNT', '/etc/secrets/FIREBASE_SERVICE_ACCOUNT.json']
+                    .find((candidate) => fs.existsSync(candidate));
+            if (secretFilePath && fs.existsSync(secretFilePath)) {
+                serviceAccountJson = fs.readFileSync(secretFilePath, 'utf8');
+            }
+        }
+        let credential = applicationDefault();
+        if (serviceAccountJson) {
+            const serviceAccount = JSON.parse(serviceAccountJson);
+            if (serviceAccount.project_id !== FIREBASE_PROJECT_ID) {
+                throw new Error('Firebase Admin service account project_id does not match the configured Firebase project.');
+            }
+            credential = cert(serviceAccount);
+        }
         adminApp = initializeApp({
             credential,
             projectId: FIREBASE_PROJECT_ID
@@ -245,6 +259,117 @@ app.post(['/api/workspace/users/sync', '/api/workspace/dm-directory/sync'], asyn
         return res.status(503).json({
             error: 'Could not load registered teammates. Configure Firebase Admin credentials for this server and try again.'
         });
+    }
+});
+
+app.post('/api/workspace/users/manage', async (req, res) => {
+    const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
+    if (!match) return res.status(401).json({ error: 'Sign in to manage workspace accounts.' });
+
+    let claims;
+    try {
+        claims = await verifyFirebaseIdToken(match[1]);
+    } catch (error) {
+        console.error('Firebase token verification failed for account management:', error);
+        return res.status(503).json({ error: 'Could not verify your sign-in right now. Please try again.' });
+    }
+    if (!claims) return res.status(401).json({ error: 'Your sign-in has expired. Please sign in again.' });
+    if (claims.email_verified !== true) return res.status(403).json({ error: 'Verify your email before managing accounts.' });
+
+    let adminAuth;
+    let firestore;
+    let isSuperAdmin;
+    try {
+        ({ auth: adminAuth, firestore } = getFirebaseAdminServices());
+        isSuperAdmin = String(claims.email || '').toLowerCase() === SUPER_ADMIN_EMAIL;
+        if (!isSuperAdmin && !(await isWorkspaceAdmin(firestore, claims))) {
+            return res.status(403).json({ error: 'Only workspace admins can manage accounts.' });
+        }
+    } catch (error) {
+        console.error('Firebase Admin initialization failed for account management:', error);
+        return res.status(503).json({ error: 'Account management is unavailable. Configure valid Firebase Admin credentials on the server.' });
+    }
+
+    const { action, uid } = req.body || {};
+    if (action === 'list') {
+        try {
+            const accounts = [];
+            let pageToken;
+            do {
+                const page = await adminAuth.listUsers(1000, pageToken);
+                const users = page.users;
+                for (let offset = 0; offset < users.length; offset += 400) {
+                    const chunk = users.slice(offset, offset + 400);
+                    const profileRefs = chunk.map((user) => firestore.collection('users').doc(user.uid));
+                    const adminRefs = chunk.map((user) => firestore.collection('workspaceAdmins').doc(user.uid));
+                    const [profiles, roles] = await Promise.all([
+                        firestore.getAll(...profileRefs),
+                        firestore.getAll(...adminRefs)
+                    ]);
+                    chunk.forEach((user, index) => {
+                        const profile = profiles[index].exists ? profiles[index].data() : {};
+                        const isAccountAdmin = roles[index].exists;
+                        accounts.push({
+                            uid: user.uid,
+                            email: user.email || profile.email || '',
+                            name: profile.name || user.displayName || user.email || 'Workspace user',
+                            disabled: user.disabled,
+                            isAdmin: isAccountAdmin || String(user.email || '').toLowerCase() === SUPER_ADMIN_EMAIL,
+                            protected: user.uid === claims.sub || String(user.email || '').toLowerCase() === SUPER_ADMIN_EMAIL
+                        });
+                    });
+                }
+                pageToken = page.pageToken;
+            } while (pageToken);
+            return res.json({ accounts });
+        } catch (error) {
+            console.error('Workspace account list failed:', error);
+            return res.status(503).json({ error: 'Could not load workspace accounts. Check Firebase Admin credentials and permissions.' });
+        }
+    }
+
+    if (typeof uid !== 'string' || !uid || uid.length > 128 || !['disable', 'enable', 'revoke', 'delete'].includes(action)) {
+        return res.status(400).json({ error: 'Choose a valid account and management action.' });
+    }
+    if (uid === claims.sub) return res.status(403).json({ error: 'You cannot disable, revoke, or delete your own account.' });
+
+    try {
+        const target = await adminAuth.getUser(uid);
+        const targetEmail = String(target.email || '').toLowerCase();
+        if (targetEmail === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'The super admin account is protected.' });
+        const targetAdmin = await firestore.collection('workspaceAdmins').doc(uid).get();
+        if (!isSuperAdmin && targetAdmin.exists) {
+            return res.status(403).json({ error: 'Only the super admin can manage another admin account.' });
+        }
+
+        if (action === 'disable') {
+            await adminAuth.updateUser(uid, { disabled: true });
+            await adminAuth.revokeRefreshTokens(uid);
+            await firestore.collection('users').doc(uid).set({ disabled: true }, { merge: true });
+            return res.json({ status: 'disabled' });
+        }
+        if (action === 'enable') {
+            await adminAuth.updateUser(uid, { disabled: false });
+            await firestore.collection('users').doc(uid).set({ disabled: false }, { merge: true });
+            return res.json({ status: 'enabled' });
+        }
+        if (action === 'revoke') {
+            await adminAuth.revokeRefreshTokens(uid);
+            return res.json({ status: 'revoked' });
+        }
+
+        await adminAuth.deleteUser(uid);
+        const cleanup = [
+            firestore.collection('users').doc(uid).delete(),
+            firestore.collection('orgAssignments').doc(uid).delete()
+        ];
+        if (isSuperAdmin) cleanup.push(firestore.collection('workspaceAdmins').doc(uid).delete());
+        await Promise.all(cleanup);
+        return res.json({ status: 'deleted' });
+    } catch (error) {
+        console.error('Workspace account action failed:', action, uid, error);
+        if (error.code === 'auth/user-not-found') return res.status(404).json({ error: 'That account no longer exists.' });
+        return res.status(503).json({ error: 'Could not ' + action + ' that account. Check Firebase Admin permissions and try again.' });
     }
 });
 
