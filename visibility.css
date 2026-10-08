@@ -100,3 +100,8 @@ html.high-visibility #visibility-toggle {
     padding: 5px 8px;
   }
 }
+
+.wk-row #visibility-toggle {
+  position: static !important;
+  inset: auto !important;
+}

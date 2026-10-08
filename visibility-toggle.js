@@ -24,6 +24,11 @@
   toggle.type = 'button';
   toggle.setAttribute('aria-label', 'High visibility mode');
   toggle.setAttribute('aria-pressed', 'false');
+  toggle.style.position = 'static';
+  toggle.style.top = 'auto';
+  toggle.style.right = 'auto';
+  toggle.style.bottom = 'auto';
+  toggle.style.left = 'auto';
   toggle.addEventListener('click', function () {
     setHighVisibility(!enabled);
   });
