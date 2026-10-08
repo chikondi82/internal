@@ -917,13 +917,16 @@ function openChat(uid, name, color, ini) {
   var accessCheckId = ++dmAccessCheckId;
   ac.dmAllowed = false;
   ac.dmAccessStatus = 'checking';
+  ac.dmSendWhenAllowed = false;
   setDmComposerVisible(true);
   area.innerHTML = dmIntroHTML(liveName, u);
   getWorkspaceDmAccess('access', { recipientUid: uid }).then(function (access) {
     if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid) return;
     if (access.status === 'allowed') {
+      var sendWhenAllowed = ac.dmSendWhenAllowed === true;
       ac.dmAllowed = true;
       ac.dmAccessStatus = 'allowed';
+      ac.dmSendWhenAllowed = false;
       setDmComposerVisible(true);
       G('chstat').textContent = 'Direct message';
       area.innerHTML = dmIntroHTML(liveName, u);
@@ -937,9 +940,11 @@ function openChat(uid, name, color, ini) {
           snap.forEach(function (d) { addMsg(d.data(), area, 'dm'); });
           area.scrollTop = area.scrollHeight;
         }, function (e) { handleErr(e, 'Could not load DM messages.'); });
+      if (sendWhenAllowed) sendMsg();
       return;
     }
     ac.dmAccessStatus = access.status;
+    ac.dmSendWhenAllowed = false;
     if (access.status === 'request-required') {
       G('chstat').textContent = 'Permission required';
       area.innerHTML = dmIntroHTML(liveName, u);
@@ -954,6 +959,7 @@ function openChat(uid, name, color, ini) {
     if (accessCheckId !== dmAccessCheckId || !ac || ac.uid !== uid) return;
     console.error('Could not check direct message access:', error);
     if (ac) ac.dmAccessStatus = 'error';
+    if (ac) ac.dmSendWhenAllowed = false;
     setDmComposerVisible(false);
     G('chstat').textContent = 'Access check failed';
     showDmAccessCard('error', uid, error.message);
@@ -1433,7 +1439,12 @@ function sendMsg() {
   var inp = G('minp'), text = getComposerText().trim();
   if (!text || !ac) return;
   if (ac.type === 'dm' && ac.dmAllowed !== true) {
-    handleDmComposerInput();
+    if (ac.dmAccessStatus === 'checking') {
+      ac.dmSendWhenAllowed = true;
+      toast('Checking chat access. Your message will continue once access is confirmed.');
+    } else {
+      handleDmComposerInput();
+    }
     return;
   }
   inp.innerHTML = ''; updSend();
