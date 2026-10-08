@@ -916,7 +916,7 @@ function openChat(uid, name, color, ini) {
   var accessCheckId = ++dmAccessCheckId;
   ac.dmAllowed = false;
   setDmComposerVisible(false);
-  showDmAccessCard('checking');
+  area.innerHTML = dmIntroHTML(liveName, u);
   getWorkspaceDmAccess('access', { recipientUid: uid }).then(function (access) {
     if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid) return;
     if (access.status === 'allowed') {
@@ -1012,10 +1012,7 @@ function showDmAccessCard(status, uid, errorText) {
   var message = document.createElement('p');
   var card = document.createElement('div');
   card.className = 'ch-intro dm-access-card';
-  if (status === 'checking') {
-    title.textContent = 'Checking direct message access...';
-    message.textContent = 'Please wait.';
-  } else if (status === 'request-required') {
+  if (status === 'request-required') {
     title.textContent = 'Request to message ' + name;
     message.textContent = 'This member is outside your assigned Group. Send a message request to start a private conversation.';
     addDmAccessButton(card, 'Send message request', function () { submitDmRequest(uid); });
