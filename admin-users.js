@@ -34,8 +34,15 @@ function inviteWorkspaceUser(event) {
       body: JSON.stringify({ name: name, email: email })
     });
   }).then(function (response) {
-    return response.json().then(function (data) {
-      if (!response.ok) throw new Error(data.error || 'Could not create the workspace account.');
+    return response.text().then(function (body) {
+      var data;
+      try {
+        data = body ? JSON.parse(body) : {};
+      } catch (parseError) {
+        throw new Error('The invitation service returned an invalid response (HTTP ' + response.status + '). Confirm the Render API and Netlify invite redirect are deployed.');
+      }
+      if (!data || typeof data !== 'object') data = {};
+      if (!response.ok) throw new Error(data.error || 'Could not create the workspace account (HTTP ' + response.status + ').');
       accountCreated = true;
       return auth.sendPasswordResetEmail(email, {
         url: window.location.origin + '/index.html',
