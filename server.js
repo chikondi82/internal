@@ -375,10 +375,11 @@ app.post('/api/workspace/users/invite', async (req, res) => {
         return res.status(400).json({ error: 'Enter a valid name and email address.' });
     }
 
+    let inviteStage = 'Firebase Admin initialization';
     let createdUser;
     let createdUserProfile;
     try {
-        const { auth: adminAuth, firestore } = getFirebaseAdminServices();
+      const { auth: adminAuth, firestore } = getFirebaseAdminServices();
         const isSuperAdmin = String(claims.email || '').toLowerCase() === SUPER_ADMIN_EMAIL;
         if (!isSuperAdmin) {
             const adminRole = await firestore.collection('workspaceAdmins').doc(claims.sub).get();
@@ -387,11 +388,13 @@ app.post('/api/workspace/users/invite', async (req, res) => {
             }
         }
 
+        inviteStage = 'Firebase Authentication user creation';
         createdUser = await adminAuth.createUser({
             email: normalizedEmail,
             displayName: normalizedName,
             password: crypto.randomBytes(32).toString('base64url')
         });
+        inviteStage = 'Firestore profile write';
         createdUserProfile = firestore.collection('users').doc(createdUser.uid);
         await createdUserProfile.set({
             uid: createdUser.uid,
@@ -422,9 +425,20 @@ app.post('/api/workspace/users/invite', async (req, res) => {
         if (error.code === 'auth/email-already-exists') {
             return res.status(409).json({ error: 'An account already exists for that email address.' });
         }
-        console.error('Workspace user invitation failed:', error);
+        const errorCode = String(error && (error.code || (error.errorInfo && error.errorInfo.code)) || '');
+        console.error('Workspace user invitation failed at ' + inviteStage + ':', error);
+        let message = 'Could not create the workspace account during ' + inviteStage + '.';
+        if (errorCode === 'app/invalid-credential' || /default credentials|private key/i.test(String(error && error.message || ''))) {
+            message = 'The Render server is missing valid Firebase Admin credentials. Set FIREBASE_SERVICE_ACCOUNT to a service account for whatsapp-internal-4a29f.';
+        } else if (errorCode === 'auth/insufficient-permission') {
+            message = 'The server service account needs Firebase Authentication Admin permission to create users.';
+        } else if (errorCode === 'permission-denied' || errorCode === 'firestore/permission-denied') {
+            message = 'The server service account needs Firestore write permission to save the new user profile.';
+        } else if (errorCode) {
+            message += ' Firebase error: ' + errorCode + '.';
+        }
         return res.status(503).json({
-            error: 'Could not create the workspace account. Check the server Firebase Admin credentials and try again.'
+            error: message
         });
     }
 });
