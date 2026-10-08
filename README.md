@@ -68,6 +68,9 @@ This feature requires publishing the updated `firestore.rules` rules in the
 Firebase Console and deploying the updated `server.js` API plus the Netlify
 redirects. The Super Admin must select and save the six existing accounts in
 the trusted-exceptions panel before those accounts receive the exemption.
+The client retries temporary API gateway failures while Render starts. For
+immediate DM availability after idle periods, keep the Render web service on an
+always-on plan; free instances can sleep and take about a minute to restart.
 
 All app pages include a high visibility toggle in the upper-right corner. Its
 setting is saved in the current browser's local storage and applies across the

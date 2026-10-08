@@ -957,25 +957,51 @@ function setDmComposerVisible(visible) {
 
 function getWorkspaceDmAccess(action, payload) {
   return me.getIdToken().then(function (token) {
-    return fetch('/api/workspace/dm/' + action, {
+    var url = '/api/workspace/dm/' + action;
+    var options = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify(payload)
-    });
-  }).then(function (response) {
-    return response.text().then(function (body) {
-      var result;
-      try {
-        result = body ? JSON.parse(body) : {};
-      } catch (error) {
-        if (response.status === 404) {
-          throw new Error('The direct-message access service is not deployed yet. Deploy the updated server and Netlify redirect, then try again.');
-        }
-        throw new Error('The direct-message access service returned an invalid response (HTTP ' + response.status + ').');
-      }
-      if (!response.ok) throw new Error(result.error || 'Could not process the direct message request.');
-      return result;
-    });
+    };
+    var accessRetryDelays = [6000, 12000, 18000, 24000];
+
+    function retryAccess(attempt) {
+      return new Promise(function (resolve) {
+        setTimeout(resolve, accessRetryDelays[attempt]);
+      }).then(function () {
+        return request(attempt + 1);
+      });
+    }
+
+    function request(attempt) {
+      return fetch(url, options).then(function (response) {
+        return response.text().then(function (body) {
+          var result;
+          try {
+            result = body ? JSON.parse(body) : {};
+          } catch (error) {
+            if (action === 'access' && attempt < accessRetryDelays.length
+                && [502, 503, 504].indexOf(response.status) !== -1) {
+              return retryAccess(attempt);
+            }
+            if (response.status === 404) {
+              throw new Error('The direct-message access service is not deployed yet. Deploy the updated server and Netlify redirect, then try again.');
+            }
+            if ([502, 503, 504].indexOf(response.status) !== -1) {
+              throw new Error('The direct-message service is still unavailable after several attempts (HTTP ' + response.status + '). Try again shortly.');
+            }
+            throw new Error('The direct-message access service returned an invalid response (HTTP ' + response.status + ').');
+          }
+          if (!response.ok) throw new Error(result.error || 'Could not process the direct message request.');
+          return result;
+        });
+      }, function (error) {
+        if (action === 'access' && attempt < accessRetryDelays.length && error instanceof TypeError) return retryAccess(attempt);
+        throw error;
+      });
+    }
+
+    return request(0);
   });
 }
 
