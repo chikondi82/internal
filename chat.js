@@ -915,6 +915,10 @@ function openChat(uid, name, color, ini) {
   if (dmRequestUnsub) { try { dmRequestUnsub(); } catch (e) {} dmRequestUnsub = null; }
   var convId = cid(me.uid, uid), area = G('msgs');
   var accessCheckId = ++dmAccessCheckId;
+  if (currentUserIsAdmin()) {
+    loadDmMessages(uid, liveName, u, convId);
+    return;
+  }
   ac.dmAllowed = false;
   ac.dmAccessStatus = 'checking';
   ac.dmSendWhenAllowed = false;
@@ -924,22 +928,7 @@ function openChat(uid, name, color, ini) {
     if (accessCheckId !== dmAccessCheckId || !ac || ac.type !== 'dm' || ac.uid !== uid) return;
     if (access.status === 'allowed') {
       var sendWhenAllowed = ac.dmSendWhenAllowed === true;
-      ac.dmAllowed = true;
-      ac.dmAccessStatus = 'allowed';
-      ac.dmSendWhenAllowed = false;
-      setDmComposerVisible(true);
-      G('chstat').textContent = 'Direct message';
-      area.innerHTML = dmIntroHTML(liveName, u);
-      msgUnsub = db.collection('conversations').doc(convId)
-        .collection('messages').orderBy('createdAt', 'asc')
-        .onSnapshot(function (snap) {
-          if (!ac || ac.type !== 'dm' || ac.uid !== uid) return;
-          var curU = usersCache.find(function (x) { return x.uid === uid; }) || u;
-          var curName = curU.name || curU.email || liveName;
-          area.innerHTML = dmIntroHTML(curName, curU);
-          snap.forEach(function (d) { addMsg(d.data(), area, 'dm'); });
-          area.scrollTop = area.scrollHeight;
-        }, function (e) { handleErr(e, 'Could not load DM messages.'); });
+      loadDmMessages(uid, liveName, u, convId);
       if (sendWhenAllowed) sendMsg();
       return;
     }
@@ -964,6 +953,27 @@ function openChat(uid, name, color, ini) {
     G('chstat').textContent = 'Access check failed';
     showDmAccessCard('error', uid, error.message);
   });
+}
+
+function loadDmMessages(uid, liveName, user, convId) {
+  if (!ac || ac.type !== 'dm' || ac.uid !== uid) return;
+  var area = G('msgs');
+  ac.dmAllowed = true;
+  ac.dmAccessStatus = 'allowed';
+  ac.dmSendWhenAllowed = false;
+  setDmComposerVisible(true);
+  G('chstat').textContent = 'Direct message';
+  area.innerHTML = dmIntroHTML(liveName, user);
+  msgUnsub = db.collection('conversations').doc(convId)
+    .collection('messages').orderBy('createdAt', 'asc')
+    .onSnapshot(function (snap) {
+      if (!ac || ac.type !== 'dm' || ac.uid !== uid) return;
+      var currentUser = usersCache.find(function (candidate) { return candidate.uid === uid; }) || user;
+      var currentName = currentUser.name || currentUser.email || liveName;
+      area.innerHTML = dmIntroHTML(currentName, currentUser);
+      snap.forEach(function (doc) { addMsg(doc.data(), area, 'dm'); });
+      area.scrollTop = area.scrollHeight;
+    }, function (error) { handleErr(error, 'Could not load DM messages.'); });
 }
 
 function setDmComposerVisible(visible) {
@@ -1484,6 +1494,7 @@ document.addEventListener('workspace-role-changed', function (event) {
   if (!me || !event.detail || event.detail.uid !== me.uid) return;
   loadChannels();
   if (ac && ac.type === 'channel') openChannel(ac.id, ac.name, ac.description);
+  else if (ac && ac.type === 'dm') openChat(ac.uid, ac.name, ac.color, ac.ini);
 });
 
 auth.onAuthStateChanged(function (user) {
