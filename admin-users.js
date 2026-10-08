@@ -1,6 +1,9 @@
 function setUserInviteAccess() {
-  var button = G('user-management-open');
-  if (button) button.style.display = currentUserIsAdmin() ? '' : 'none';
+  var isAdmin = currentUserIsAdmin();
+  ['user-management-open', 'user-management-open-footer'].forEach(function (id) {
+    var button = G(id);
+    if (button) button.style.display = isAdmin ? '' : 'none';
+  });
 }
 
 auth.onAuthStateChanged(function (user) {

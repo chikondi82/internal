@@ -5012,7 +5012,8 @@ canvas {
   overflow: auto;
 }
 
-#user-management-open {
+#user-management-open,
+.admin-management-footer {
   width: 100%;
   border: 0;
   background: transparent;
