@@ -214,8 +214,12 @@ service cloud.firestore {
             && !(channelId in ['general', 'random', 'announcements'])
             && resource.data.createdBy == request.auth.uid);
       match /members/{userId} {
-        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-        allow create: if isAdmin() && request.resource.data.uid == userId;
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin() || canAccessChannel(channelId));
+        allow create: if request.auth != null
+          && request.resource.data.uid == userId
+          && (isAdmin()
+              || (request.auth.uid == userId
+                  && get(/databases/$(database)/documents/channels/$(channelId)).data.get('visibility', 'public') != 'private'));
         allow delete: if isAdmin();
       }
       match /requests/{userId} {
@@ -260,7 +264,11 @@ service cloud.firestore {
         }
       }
       match /subgroupAssignments/{userId} {
-        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin()
+          || (canAccessChannel(channelId)
+              && resource.data.subgroupId is string
+              && exists(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid))
+              && get(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid)).data.subgroupId == resource.data.subgroupId));
         allow create, update: if request.auth != null
           && (request.auth.uid == userId || isAdmin())
           && canAccessChannel(channelId)

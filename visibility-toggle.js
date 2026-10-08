@@ -27,6 +27,9 @@
   toggle.addEventListener('click', function () {
     setHighVisibility(!enabled);
   });
-  document.body.appendChild(toggle);
+  var header = document.querySelector('.wk-row');
+  var logoutButton = header && header.querySelector('button[onclick="doLogout()"]');
+  if (header && logoutButton) header.insertBefore(toggle, logoutButton);
+  else document.body.appendChild(toggle);
   setHighVisibility(enabled);
 }());

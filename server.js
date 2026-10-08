@@ -292,6 +292,7 @@ app.post('/api/workspace/users/manage', async (req, res) => {
 
     const { action, uid } = req.body || {};
     if (action === 'list') {
+        let accountListStage = 'Firebase Authentication user listing';
         try {
             const accounts = [];
             let pageToken;
@@ -302,6 +303,7 @@ app.post('/api/workspace/users/manage', async (req, res) => {
                     const chunk = users.slice(offset, offset + 400);
                     const profileRefs = chunk.map((user) => firestore.collection('users').doc(user.uid));
                     const adminRefs = chunk.map((user) => firestore.collection('workspaceAdmins').doc(user.uid));
+                    accountListStage = 'Firestore profile and admin-role lookup';
                     const [profiles, roles] = await Promise.all([
                         firestore.getAll(...profileRefs),
                         firestore.getAll(...adminRefs)
@@ -320,11 +322,22 @@ app.post('/api/workspace/users/manage', async (req, res) => {
                     });
                 }
                 pageToken = page.pageToken;
+                accountListStage = 'Firebase Authentication user listing';
             } while (pageToken);
             return res.json({ accounts });
         } catch (error) {
-            console.error('Workspace account list failed:', error);
-            return res.status(503).json({ error: 'Could not load workspace accounts. Check Firebase Admin credentials and permissions.' });
+            const errorCode = String(error && (error.code || (error.errorInfo && error.errorInfo.code)) || 'unknown');
+            const errorMessage = String(error && error.message || '');
+            console.error('Workspace account list failed during ' + accountListStage + ' (' + errorCode + '):', error);
+            let message = 'Could not load workspace accounts during ' + accountListStage + ' (Firebase error ' + errorCode + ').';
+            if (errorCode === 'app/invalid-credential' || /invalid_grant|invalid credential/i.test(errorMessage)) {
+                message = 'The server rejected its Firebase Admin service-account key. Configure FIREBASE_SERVICE_ACCOUNT with a valid JSON key for whatsapp-internal-4a29f, then restart the server.';
+            } else if (errorCode === 'auth/insufficient-permission' || /insufficient permission/i.test(errorMessage)) {
+                message = 'The Render service account needs Firebase Authentication Admin permission to list workspace accounts.';
+            } else if (errorCode === '7' || errorCode === 'permission-denied' || /PERMISSION_DENIED|permission denied/i.test(errorMessage)) {
+                message = 'The Render service account needs Firestore read permission (Cloud Datastore User) to load account profiles and admin roles.';
+            }
+            return res.status(503).json({ error: message });
         }
     }
 

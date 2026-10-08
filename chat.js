@@ -1,5 +1,6 @@
 var ac = null, msgUnsub = null, usersUnsub = null, meDocUnsub = null, dmRequestsUnsub = null, dmRequestUnsub = null, dmAccessCheckId = 0, dmRequestsCache = [], dmPermissionPrompt = null, dmExceptionUids = [], dmExceptionConfigLoaded = false, dmExceptionConfigPromise = null, usersCache = [], channelsCache = [], myProfile = {};
-var TOTAL_USERS = 0;
+var allUsersByUid = {};
+var channelMembersUnsub = null, subgroupMembersUnsub = null, channelMemberUids = [], subgroupMemberUids = [];
 var SECT_OPEN = { ch: true, dm: true };
 var DEFAULT_CHANNELS = [
   { id: 'general', name: 'general', description: 'Company-wide announcements and work-based matters', createdAt: 0 },
@@ -117,17 +118,14 @@ function loadUsers() {
   }
   usersUnsub = db.collection('users').onSnapshot(function (snap) {
     usersCache = [];
-    TOTAL_USERS = 0;
+    allUsersByUid = {};
     snap.forEach(function (d) {
       var u = d.data();
       u.uid = d.id;
-      TOTAL_USERS++;
+      allUsersByUid[d.id] = u;
       if (d.id !== me.uid) usersCache.push(u);
     });
-    var tch = G('chstat');
-    if (tch && ac && ac.type === 'channel') {
-      tch.innerHTML = '<span class="dot"></span> ' + TOTAL_USERS + ' member' + (TOTAL_USERS === 1 ? '' : 's');
-    }
+    updateOpenMemberCount();
     renderSidebar();
     renderDmRequests(dmRequestsCache);
     updateSuperAdminDmActions();
@@ -184,11 +182,18 @@ function renderChannels() {
 
 function renderDMs() {
   var el = G('dmlist');
-  if (!usersCache.length) {
+  var visibleUsers = usersCache.filter(isVisibleInDmDirectory);
+  if (!visibleUsers.length) {
     el.innerHTML = '<div style="color:rgba(255,255,255,0.28);font-size:12px;padding:4px 8px 10px;line-height:1.6">No teammates yet.<br/>Invite colleagues to sign up!</div>';
     return;
   }
-  renderDMRows(el, usersCache);
+  renderDMRows(el, visibleUsers);
+}
+
+function isVisibleInDmDirectory(user) {
+  var displayName = String(user && (user.name || user.email) || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return displayName !== 'simon pierre nuru';
 }
 
 function loadDmRequests() {
@@ -367,7 +372,10 @@ function onSearch() {
         + '<span class="hash">#</span><span class="rname">' + esc(c.name) + '</span></div>';
     }).join('');
   var del = G('dmlist');
-  var fdm = usersCache.filter(function (u) { return (u.name || '').toLowerCase().indexOf(q) > -1 || (u.email || '').toLowerCase().indexOf(q) > -1; });
+  var fdm = usersCache.filter(function (u) {
+    return isVisibleInDmDirectory(u)
+      && ((u.name || '').toLowerCase().indexOf(q) > -1 || (u.email || '').toLowerCase().indexOf(q) > -1);
+  });
   if (!fdm.length) {
     del.innerHTML = '<div style="color:rgba(255,255,255,0.28);font-size:12px;padding:4px 8px">No people</div>';
     return;
@@ -429,7 +437,52 @@ function createChannel() {
 }
 
 function activeOff() {
+  stopMemberCountListeners();
   document.querySelectorAll('.row.on, .crow.on').forEach(function (r) { r.classList.remove('on'); });
+}
+
+function stopMemberCountListeners() {
+  if (channelMembersUnsub) { try { channelMembersUnsub(); } catch (_) {} channelMembersUnsub = null; }
+  if (subgroupMembersUnsub) { try { subgroupMembersUnsub(); } catch (_) {} subgroupMembersUnsub = null; }
+  channelMemberUids = [];
+  subgroupMemberUids = [];
+}
+
+function setMemberCount(count) {
+  var status = G('chstat');
+  if (!status) return;
+  status.innerHTML = '<span class="dot"></span> ' + count + ' member' + (count === 1 ? '' : 's');
+}
+
+function subscribeChannelMemberCount(channelId) {
+  var members = db.collection('channels').doc(channelId).collection('members');
+  channelMemberUids = [];
+  channelMembersUnsub = members.onSnapshot(function (snap) {
+    channelMemberUids = snap.docs.map(function (doc) { return doc.id; });
+    updateOpenMemberCount();
+  }, function () { G('chstat').textContent = 'Member count unavailable'; });
+  members.doc(me.uid).get().then(function (member) {
+    if (!member.exists) {
+      return members.doc(me.uid).set({ uid: me.uid, joinedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
+  }).catch(function (error) {
+    console.warn('Channel membership could not be recorded:', error);
+  });
+}
+
+function countActiveMembers(uids) {
+  return uids.filter(function (uid) {
+    var user = allUsersByUid[uid];
+    return !!me && uid === me.uid || !!user && user.disabled !== true;
+  }).length;
+}
+
+function updateOpenMemberCount() {
+  if (ac && ac.type === 'channel') {
+    setMemberCount(countActiveMembers(channelMemberUids));
+  } else if (ac && ac.type === 'subgroup') {
+    setMemberCount(countActiveMembers(subgroupMemberUids));
+  }
 }
 
 function scrollToDM() {
@@ -733,7 +786,13 @@ function openSubgroup(channelId, subgroupId) {
     activeOff(); var row = G('ch-' + channelId); if (row) row.classList.add('on');
     G('nc').style.display = 'none'; G('ac').style.display = 'flex';
     G('chav').textContent = '↳'; G('chname').textContent = channel.name + ' / ' + group.name;
-    G('chstat').textContent = 'Work group'; G('ch-topic').textContent = group.description || '';
+    G('chstat').textContent = 'Loading members…'; G('ch-topic').textContent = group.description || '';
+    subgroupMemberUids = [];
+    subgroupMembersUnsub = base.collection('subgroupAssignments').where('subgroupId', '==', subgroupId)
+      .onSnapshot(function (snap) {
+        subgroupMemberUids = snap.docs.map(function (doc) { return doc.id; });
+        updateOpenMemberCount();
+      }, function () { G('chstat').textContent = 'Member count unavailable'; });
     G('cmp-hint').textContent = 'Message ' + group.name;
     var adminBtn = G('ch-admin-btn'); if (adminBtn) adminBtn.style.display = 'none';
     var visibilityBtn = G('ch-visibility-btn'); if (visibilityBtn) visibilityBtn.style.display = 'none';
@@ -762,11 +821,7 @@ function toggleChannelVisibility(cid) {
   var nextVisibility = c.visibility === 'private' ? 'public' : 'private';
   var button = G('ch-visibility-btn');
   if (button) { button.disabled = true; button.textContent = 'Saving…'; }
-  var updateVisibility = nextVisibility === 'private'
-    ? preserveCurrentChannelMembers(c).then(function () {
-        return db.collection('channels').doc(cid).update({ visibility: nextVisibility });
-      })
-    : db.collection('channels').doc(cid).update({ visibility: nextVisibility });
+  var updateVisibility = db.collection('channels').doc(cid).update({ visibility: nextVisibility });
   updateVisibility.then(function () {
     c.visibility = nextVisibility;
     c._reviewing = false;
@@ -775,37 +830,6 @@ function toggleChannelVisibility(cid) {
     _realOpenChannel(c.id, c.name, c.description);
   }).catch(function (e) { handleErr(e, 'Could not change channel access.'); })
     .then(function () { if (button) button.disabled = false; });
-}
-
-function preserveCurrentChannelMembers(c) {
-  var base = db.collection('channels').doc(c.id);
-  return Promise.all([
-    db.collection('users').get(),
-    base.collection('members').get()
-  ]).then(function (snaps) {
-    var existing = {};
-    snaps[1].forEach(function (doc) { existing[doc.id] = true; });
-    var toAdd = [];
-    snaps[0].forEach(function (doc) {
-      if (!existing[doc.id]) toAdd.push(doc.id);
-    });
-    var work = Promise.resolve();
-    for (var i = 0; i < toAdd.length; i += 450) {
-      (function (uids) {
-        work = work.then(function () {
-          var batch = db.batch();
-          uids.forEach(function (uid) {
-            batch.set(base.collection('members').doc(uid), {
-              uid: uid,
-              joinedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-          });
-          return batch.commit();
-        });
-      })(toAdd.slice(i, i + 450));
-    }
-    return work;
-  });
 }
 
 function _realOpenChannel(cid, cname, cdesc) {
@@ -824,7 +848,8 @@ function _realOpenChannel(cid, cname, cdesc) {
   chav.style.background = 'linear-gradient(135deg,#075e45,#c9a84c)';
   chav.style.backgroundImage = '';
   G('chname').textContent = c.name;
-  G('chstat').innerHTML = '<span class="dot"></span> ' + TOTAL_USERS + ' member' + (TOTAL_USERS === 1 ? '' : 's');
+  G('chstat').textContent = 'Loading members…';
+  subscribeChannelMemberCount(cid);
   G('ch-topic').textContent = c.description || '';
   var composer = G('minp'); if (composer && composer.closest) composer.closest('.composer').style.display = '';
   var adminBtn = G('ch-admin-btn');
