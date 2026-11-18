@@ -150,6 +150,7 @@ var FIRESTORE_RULES_TEXT = ''
   + '  match /databases/{database}/documents {\n'
   + '    function isSuperAdmin() { return request.auth != null && request.auth.token.email == \'chikondigahimbare@gmail.com\'; }\n'
   + '    function isAdmin() { return request.auth != null && (isSuperAdmin() || (exists(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)) && get(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true)); }\n'
+  + '    function isHr() { return request.auth != null && request.auth.token.email_verified == true && (isSuperAdmin() || (exists(/databases/$(database)/documents/hrAccess/$(request.auth.uid)) && get(/databases/$(database)/documents/hrAccess/$(request.auth.uid)).data.enabled == true)); }\n'
   + '    function isDmException(userId) { return exists(/databases/$(database)/documents/workspaceConfig/dmAccessExceptions) && userId in get(/databases/$(database)/documents/workspaceConfig/dmAccessExceptions).data.uids; }\n'
   + '    function hasSameDmGroup(peerUid) { let myAssignment = /databases/$(database)/documents/orgAssignments/$(request.auth.uid); let peerAssignment = /databases/$(database)/documents/orgAssignments/$(peerUid); return request.auth != null && exists(myAssignment) && exists(peerAssignment) && get(myAssignment).data.groupId is string && get(myAssignment).data.groupId.size() > 0 && get(myAssignment).data.groupId == get(peerAssignment).data.groupId; }\n'
   + '    function otherDmParticipant(participants) { return participants[0] == request.auth.uid ? participants[1] : participants[0]; }\n'
@@ -172,6 +173,17 @@ var FIRESTORE_RULES_TEXT = ''
   + '    match /dmRequests/{convId} { allow read: if request.auth != null && (resource.data.senderUid == request.auth.uid || resource.data.recipientUid == request.auth.uid); allow create, update, delete: if false; }\n'
   + '    match /groups/{groupId}/messages/{msgId} { allow read, create, delete: if request.auth != null; }\n'
   + '    match /workspaceAdmins/{userId} { allow read: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId); allow create, update: if isSuperAdmin() && request.resource.data.uid == userId && request.resource.data.enabled is bool; allow delete: if isSuperAdmin(); }\n'
+  + '    match /hrAccess/{userId} { allow get: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId); allow list: if isSuperAdmin(); allow create, update, delete: if false; }\n'
+  + '    match /hrEmployees/{employeeId} { allow read, write: if isHr(); }\n'
+  + '    match /hrLinkRequests/{userId} { allow get: if isHr() || (request.auth != null && request.auth.uid == userId); allow list: if isHr(); allow create, update, delete: if false; }\n'
+  + '    match /hrNotifications/{userId}/items/{itemId} { allow read: if request.auth != null && request.auth.uid == userId; allow update: if request.auth != null && request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly([\'isRead\']) && request.resource.data.isRead is bool; allow create, delete: if false; }\n'
+  + '    match /hrOnboarding/{taskId} { allow read, write: if isHr(); }\n'
+  + '    match /hrLeaveRequests/{requestId} { allow read, write: if isHr(); }\n'
+  + '    match /hrPolicies/{policyId} { allow read: if isHr() || (request.auth != null && resource.data.published == true); allow write: if isHr(); }\n'
+  + '    match /hrCases/{caseId} { allow read: if isHr() || (request.auth != null && resource.data.employeeUid == request.auth.uid); allow create, update, delete: if false; match /messages/{messageId} { allow read: if isHr() || (request.auth != null && get(/databases/$(database)/documents/hrCases/$(caseId)).data.employeeUid == request.auth.uid); allow create, update, delete: if false; } }\n'
+  + '    match /hrAdminReports/{reportId} { allow read: if isHr(); allow create, update, delete: if false; match /messages/{messageId} { allow read: if isHr(); allow create, update, delete: if false; } }\n'
+  + '    match /hrAuditLogs/{entryId} { allow read: if isHr(); allow create: if isHr() && request.resource.data.actorUid == request.auth.uid && request.resource.data.action is string && request.resource.data.entityType is string && request.resource.data.entityId is string; allow update, delete: if false; }\n'
+  + '    match /hrInvitations/{inviteId} { allow read, write: if false; }\n'
   + '    match /workspaceConfig/{configId} { allow read: if request.auth != null; allow create, update: if isSuperAdmin() && ((configId == \'founder\' && request.resource.data.uid == request.auth.uid) || (configId == \'dmAccessExceptions\' && request.resource.data.uids is list && request.resource.data.uids.size() == 6 && request.resource.data.accountUids is map && request.resource.data.accountUids.size() == 6 && request.resource.data.updatedBy == request.auth.uid)); allow delete: if isSuperAdmin() && configId in [\'founder\', \'dmAccessExceptions\']; }\n'
   + '    match /orgGroups/{groupId} { allow read: if request.auth != null; allow create: if isAdmin() && request.resource.data.name is string && request.resource.data.name.size() > 0; allow update, delete: if isAdmin(); }\n'
   + '    match /orgAssignments/{userId} { allow read: if request.auth != null && (request.auth.uid == userId || isAdmin() || resource.data.supervisorUid == request.auth.uid); allow create, update: if isAdmin() && request.resource.data.uid == userId && request.resource.data.groupId is string && exists(/databases/$(database)/documents/orgGroups/$(request.resource.data.groupId)) && request.resource.data.supervisorUid is string && request.resource.data.supervisorUid != userId; allow delete: if isAdmin(); }\n'
@@ -797,12 +809,38 @@ var PROFILE_PRESET_GRADIENTS = [
   'linear-gradient(135deg,#14b8a6,#075e54)','linear-gradient(135deg,#d6b85a,#25a96b)',
   'linear-gradient(135deg,#0f8a5f,#c9a84c)','linear-gradient(135deg,#84cc16,#25D366)'
 ];
-var PROFILE_UPLOADED_DATAURL = '';
 var PROFILE_UPLOADED_REMOTE_URL = '';
+var PROFILE_UPLOAD_TASK = null;
+var PROFILE_UPLOAD_GENERATION = 0;
+var PROFILE_UPLOAD_TIMEOUT = null;
+var PROFILE_PREVIEW_OBJECT_URL = '';
+
+function setProfileSaveButton(disabled, text) {
+  var button = G('pbtn');
+  if (!button) return;
+  button.disabled = disabled;
+  button.textContent = text || 'Save Changes';
+}
+
+function cancelProfileUpload() {
+  PROFILE_UPLOAD_GENERATION += 1;
+  if (PROFILE_UPLOAD_TIMEOUT) {
+    clearTimeout(PROFILE_UPLOAD_TIMEOUT);
+    PROFILE_UPLOAD_TIMEOUT = null;
+  }
+  if (PROFILE_UPLOAD_TASK) {
+    PROFILE_UPLOAD_TASK.cancel();
+    PROFILE_UPLOAD_TASK = null;
+  }
+  if (PROFILE_PREVIEW_OBJECT_URL) {
+    URL.revokeObjectURL(PROFILE_PREVIEW_OBJECT_URL);
+    PROFILE_PREVIEW_OBJECT_URL = '';
+  }
+  setProfileSaveButton(false, 'Save Changes');
+}
 
 function getCurrentProfilePhoto() {
   if (PROFILE_UPLOADED_REMOTE_URL) return PROFILE_UPLOADED_REMOTE_URL;
-  if (PROFILE_UPLOADED_DATAURL) return PROFILE_UPLOADED_DATAURL;
   var u = G('pfile-url');
   return u ? u.value : '';
 }
@@ -884,7 +922,13 @@ function buildProfileModalIfNeeded() {
   }
   var pfu = G('pfile-url');
   if (pfu && !pfu._bound) {
-    pfu.addEventListener('input', function () { renderProfilePreview(pfu.value, G('pemoji').value, PROFILE_PRESET_GRADIENTS[0]); });
+    pfu.addEventListener('input', function () {
+      cancelProfileUpload();
+      PROFILE_UPLOADED_REMOTE_URL = '';
+      var type = G('pav-type');
+      if (pfu.value.trim() && type) type.value = 'photo';
+      renderProfilePreview(pfu.value.trim(), G('pemoji').value, PROFILE_PRESET_GRADIENTS[0]);
+    });
     pfu._bound = true;
   }
   return wrap;
@@ -895,7 +939,7 @@ function openProfileModal() {
     var modal = buildProfileModalIfNeeded();
     if (!modal) { toast('Profile builder failed — reload the page and try again.'); return; }
     modal.style.display = 'flex';
-    PROFILE_UPLOADED_DATAURL = '';
+    cancelProfileUpload();
     PROFILE_UPLOADED_REMOTE_URL = '';
     var name = (me && me.displayName) || (me && me.email) || '';
     var email = (me && me.email) || '';
@@ -955,6 +999,7 @@ function closeProfileModal() {
   try {
     var m = G('pmodal');
     if (m) m.style.display = 'none';
+    cancelProfileUpload();
   } catch (e) { console.warn(e); }
 }
 
@@ -987,46 +1032,107 @@ function handleProfileFileChange() {
       fi.value = '';
       return;
     }
-    if (!(file.type || '').startsWith('image/')) {
-      toast('Please choose an image (JPG, PNG, WebP, HEIC, etc).');
+    if (!(file.type || '').toLowerCase().startsWith('image/')) {
+      toast('Please choose an image file such as JPG, PNG or WebP.');
       fi.value = '';
       return;
     }
-    toast('Uploading your profile picture...', 'success');
-    var pbtn = G('pbtn');
-    if (pbtn) { pbtn.disabled = true; pbtn.textContent = 'Uploading picture...'; }
+    if (!STORAGE_AVAILABLE || !storage) {
+      toast('Profile picture upload is unavailable because Firebase Storage did not load. Please refresh and try again.');
+      fi.value = '';
+      return;
+    }
+    cancelProfileUpload();
+    var generation = PROFILE_UPLOAD_GENERATION;
+    PROFILE_UPLOADED_REMOTE_URL = '';
+    var urlInput = G('pfile-url');
+    if (urlInput) urlInput.value = '';
+    var typeInput = G('pav-type');
+    if (typeInput) typeInput.value = 'photo';
     var pe = G('pemoji');
     var emojiVal = pe ? pe.value : '🚀';
     var grad = PROFILE_PRESET_GRADIENTS[0];
-    dataURLFromFile(file).then(function (durl) {
-      PROFILE_UPLOADED_DATAURL = durl;
-      PROFILE_UPLOADED_REMOTE_URL = '';
-      renderProfilePreview(durl, emojiVal, grad);
-      if (STORAGE_AVAILABLE && storage) {
-        return uploadMediaFile(file, 'avatars').then(function (res) {
-          if (res && res.url) {
-            PROFILE_UPLOADED_REMOTE_URL = res.url;
-            toast('Profile picture uploaded! Save to apply.', 'success');
-            renderProfilePreview(res.url, emojiVal, grad);
-          }
-        }).catch(function (e) { console.warn('storage fallback:', e); toast('Storage upload failed — using inline preview (still visible to you locally).'); });
+    if (PROFILE_PREVIEW_OBJECT_URL) URL.revokeObjectURL(PROFILE_PREVIEW_OBJECT_URL);
+    PROFILE_PREVIEW_OBJECT_URL = URL.createObjectURL(file);
+    renderProfilePreview(PROFILE_PREVIEW_OBJECT_URL, emojiVal, grad);
+    var safeName = (file.name || 'profile-picture').replace(/[^a-zA-Z0-9._-]+/g, '_');
+    var path = 'avatars/' + me.uid + '/' + Date.now() + '-' + safeName;
+    var uploadTask = storage.ref(path).put(file, { contentType: file.type });
+    PROFILE_UPLOAD_TASK = uploadTask;
+    setProfileSaveButton(true, 'Uploading picture… 0%');
+    toast('Uploading your profile picture…', 'success');
+    uploadTask.on('state_changed', function (snapshot) {
+      if (generation !== PROFILE_UPLOAD_GENERATION) return;
+      var progress = snapshot.totalBytes
+        ? Math.floor(snapshot.bytesTransferred / snapshot.totalBytes * 100)
+        : 0;
+      setProfileSaveButton(true, 'Uploading picture… ' + progress + '%');
+    }, function (error) {
+      if (generation !== PROFILE_UPLOAD_GENERATION) return;
+      if (PROFILE_UPLOAD_TIMEOUT) {
+        clearTimeout(PROFILE_UPLOAD_TIMEOUT);
+        PROFILE_UPLOAD_TIMEOUT = null;
       }
-      return Promise.resolve();
-    }).then(function () {
-      if (pbtn) { pbtn.disabled = false; pbtn.textContent = 'Save Changes'; }
-    }).catch(function (err) {
-      console.error('handleProfileFileChange error:', err);
-      toast('Could not upload picture: ' + ((err && err.message) || err));
-      if (pbtn) { pbtn.disabled = false; pbtn.textContent = 'Save Changes'; }
+      PROFILE_UPLOAD_TASK = null;
+      if (error && error.code === 'storage/canceled') return;
+      console.error('Profile picture upload failed:', error);
+      toast('Could not upload picture: ' + ((error && error.message) || error));
+      setProfileSaveButton(false, 'Save Changes');
+      fi.value = '';
+    }, function () {
+      if (generation !== PROFILE_UPLOAD_GENERATION) return;
+      uploadTask.snapshot.ref.getDownloadURL().then(function (url) {
+        if (generation !== PROFILE_UPLOAD_GENERATION) return;
+        if (PROFILE_UPLOAD_TIMEOUT) {
+          clearTimeout(PROFILE_UPLOAD_TIMEOUT);
+          PROFILE_UPLOAD_TIMEOUT = null;
+        }
+        PROFILE_UPLOAD_TASK = null;
+        PROFILE_UPLOADED_REMOTE_URL = url;
+        if (urlInput) urlInput.value = url;
+        setProfileSaveButton(false, 'Save Changes');
+        toast('Profile picture uploaded. Select Save Changes to apply it.', 'success');
+        renderProfilePreview(url, emojiVal, grad);
+      }).catch(function (error) {
+        if (generation !== PROFILE_UPLOAD_GENERATION) return;
+        if (PROFILE_UPLOAD_TIMEOUT) {
+          clearTimeout(PROFILE_UPLOAD_TIMEOUT);
+          PROFILE_UPLOAD_TIMEOUT = null;
+        }
+        PROFILE_UPLOAD_TASK = null;
+        console.error('Could not get profile picture URL:', error);
+        toast('Picture uploaded, but its download link could not be retrieved: ' + ((error && error.message) || error));
+        setProfileSaveButton(false, 'Save Changes');
+        fi.value = '';
+      });
     });
+    PROFILE_UPLOAD_TIMEOUT = setTimeout(function () {
+      if (generation !== PROFILE_UPLOAD_GENERATION) return;
+      PROFILE_UPLOAD_GENERATION += 1;
+      PROFILE_UPLOAD_TIMEOUT = null;
+      if (PROFILE_UPLOAD_TASK) PROFILE_UPLOAD_TASK.cancel();
+      PROFILE_UPLOAD_TASK = null;
+      setProfileSaveButton(false, 'Save Changes');
+      toast('The picture upload took too long. Check your connection and try again.');
+    }, 120000);
   } catch (err2) {
     console.error('handleProfileFileChange top-level error:', err2);
     toast('File picker error: ' + ((err2 && err2.message) || err2));
+    if (PROFILE_UPLOAD_TIMEOUT) {
+      clearTimeout(PROFILE_UPLOAD_TIMEOUT);
+      PROFILE_UPLOAD_TIMEOUT = null;
+    }
+    PROFILE_UPLOAD_TASK = null;
+    setProfileSaveButton(false, 'Save Changes');
   }
 }
 
 function saveProfile() {
   try {
+    if (PROFILE_UPLOAD_TASK) {
+      toast('Wait for the profile picture upload to finish before saving.');
+      return;
+    }
     if (!me || !me.uid) { toast('Sign in first, then try saving profile.'); return; }
     if (!db || !auth) { toast('Firebase not ready yet — wait and try again.', 'success'); return; }
     var pname = G('pname');
@@ -1042,10 +1148,19 @@ function saveProfile() {
     var emoji = pem ? pem.value : '🚀';
     var pfu = G('pfile-url');
     var urlInputVal = (pfu ? pfu.value || '' : '').trim();
-    var photo = PROFILE_UPLOADED_REMOTE_URL || PROFILE_UPLOADED_DATAURL || urlInputVal;
+    var photo = PROFILE_UPLOADED_REMOTE_URL || urlInputVal;
     var photoURL = type === 'photo' && photo ? photo : '';
     var grad = PROFILE_PRESET_GRADIENTS[0];
     if (!name) { toast('Please enter a display name.'); return; }
+    if (type === 'photo' && photoURL) {
+      try {
+        var parsedPhotoURL = new URL(photoURL);
+        if (parsedPhotoURL.protocol !== 'https:') throw new Error('Use a direct HTTPS link to an image.');
+      } catch (error) {
+        toast(error.message || 'Enter a valid HTTPS link to an image.');
+        return;
+      }
+    }
     var btn = G('pbtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
     var payload = {
@@ -1075,8 +1190,11 @@ function saveProfile() {
       toast('✅ Profile updated! Your new picture appears on posts and chat.', 'success');
       closeProfileModal();
       if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
-      PROFILE_UPLOADED_DATAURL = '';
       PROFILE_UPLOADED_REMOTE_URL = '';
+      if (PROFILE_PREVIEW_OBJECT_URL) {
+        URL.revokeObjectURL(PROFILE_PREVIEW_OBJECT_URL);
+        PROFILE_PREVIEW_OBJECT_URL = '';
+      }
       setTimeout(function () { try { location.reload(); } catch (noop) {} }, 900);
     }).catch(function (e) {
       var code = (e || {}).code || '';

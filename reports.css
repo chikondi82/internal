@@ -13,6 +13,14 @@
 .reports-nav a span { width: 17px; color: #7f8e85; text-align: center; }
 .reports-nav a:hover,.reports-nav a.active { background: rgba(37,169,107,.13); color: #a9e7bf; }
 .reports-nav a.active span { color: #85dba4; }
+.reports-nav a .my-hr-unread-badge { width: auto; min-width: 19px; height: 19px; margin-left: auto; color: #fff; }
+.reports-nav a.reports-hr-link { min-height: 55px; margin-top: 6px; border: 1px solid rgba(201,168,76,.32); background: linear-gradient(110deg,rgba(24,58,44,.5),rgba(20,29,37,.9)); }
+.reports-nav a.reports-hr-link:hover,.reports-nav a.reports-hr-link:focus-visible { border-color: rgba(201,168,76,.7); background: linear-gradient(110deg,rgba(31,78,56,.72),rgba(24,35,44,.96)); color: #fff; }
+.reports-nav a .reports-hr-mark { width: 31px; height: 31px; display: inline-grid; flex: 0 0 31px; place-items: center; border: 1px solid rgba(201,168,76,.42); border-radius: 9px; background: linear-gradient(145deg,#234e39,#15231f); color: #e3c56a; font-size: 10px; font-weight: 850; }
+.reports-nav a .reports-hr-copy { width: auto; min-width: 0; display: grid; flex: 1 1 auto; gap: 2px; text-align: left; }
+.reports-nav a .reports-hr-copy strong { color: #edf4f0; font-size: 12px; line-height: 1.2; }
+.reports-nav a .reports-hr-copy small { overflow: hidden; color: #93a69b; font-size: 10px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.reports-nav a .reports-hr-copy strong,.reports-nav a .reports-hr-copy small { width: auto; }
 .reports-sidebar-note { margin-top: auto; padding: 12px 10px; border-top: 1px solid rgba(255,255,255,.07); color: #a8b5ac; font-size: 10px; line-height: 1.7; }
 .reports-sidebar-note small { color: #68766e; font-size: 9px; }
 .reports-content { min-width: 0; }
@@ -624,9 +632,15 @@
   .reports-sidebar { position: relative; height: auto; padding: 10px 12px 8px; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.075); }
   .reports-brand { display: none; }
   .reports-sidebar-label,.reports-sidebar-note { display: none; }
-  .reports-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+  .reports-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
   .reports-nav a { justify-content: center; gap: 6px; padding: 9px 4px; font-size: 9px; }
   .reports-nav a span { width: auto; }
+  .reports-nav a.reports-hr-link { min-height: 38px; margin-top: 0; border-radius: 7px; }
+  .reports-nav a .reports-hr-mark { width: 24px; height: 24px; flex-basis: 24px; border-radius: 7px; font-size: 8px; }
+  .reports-nav a .reports-hr-copy { flex: 0 1 auto; }
+  .reports-nav a .reports-hr-copy strong { font-size: 9px; }
+  .reports-nav a .reports-hr-copy small { display: none; }
+  .reports-nav a.reports-hr-link .my-hr-unread-badge { width: 19px; min-width: 19px; margin-left: 0; }
   .reports-topbar { position: sticky; min-height: 54px; gap: 8px; padding: 0 12px; }
   .reports-brand { gap: 7px; font-size: 11px; }
   .reports-brand img { width: 30px; height: 30px; }

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Private HR workspace for Vialifecoach Global Foundation." />
+  <title>HR CRM | Vialifecoach Workspace</title>
+  <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="hr.css" />
+  <link rel="stylesheet" href="visibility.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="hr-page">
+  <div id="hr-toast" class="hr-toast" role="status" aria-live="polite"></div>
+  <main id="hr-gate" class="hr-gate">
+    <div class="hr-gate-card">
+      <span class="hr-mark">HR</span>
+      <p class="hr-eyebrow">PRIVATE PEOPLE OPERATIONS</p>
+      <h1 id="hr-gate-title">Checking your invitation</h1>
+      <p id="hr-gate-message">Please wait while we confirm your HR access.</p>
+      <button id="hr-gate-action" class="hr-button" type="button" hidden></button>
+      <a class="hr-back-link" href="dashboard.html">Back to workspace</a>
+    </div>
+  </main>
+
+  <div id="hr-app" class="hr-app" hidden>
+    <header class="hr-topbar">
+      <a class="hr-brand" href="dashboard.html"><span class="hr-mark">HR</span><span><b>People Operations</b><small>Vialifecoach Global Foundation</small></span></a>
+      <div class="hr-account"><span id="hr-current-user"></span><button class="hr-button hr-button-quiet" type="button" onclick="hrSignOut()">Sign out</button></div>
+    </header>
+
+    <div class="hr-shell">
+      <aside class="hr-sidebar">
+        <p class="hr-eyebrow">HR CRM</p>
+        <nav class="hr-nav" aria-label="HR sections">
+          <button type="button" class="active" data-hr-view="overview">Overview</button>
+          <button type="button" data-hr-view="employees">People</button>
+          <details class="hr-nav-dropdown">
+            <summary>HR leadership</summary>
+            <button type="button" data-hr-view="reports" data-hr-report-mode="weekly">Weekly reports</button>
+            <button type="button" data-hr-view="reports" data-hr-report-mode="help">Ask for help</button>
+          </details>
+          <button type="button" data-hr-view="link-requests">My HR link requests <span id="hr-link-request-count" class="hr-badge" hidden>0</span></button>
+          <button type="button" data-hr-view="cases">Worker messages</button>
+          <button type="button" data-hr-view="onboarding">Onboarding</button>
+          <button type="button" data-hr-view="leave">Leave</button>
+          <button type="button" data-hr-view="policies">Policies</button>
+          <button type="button" id="hr-access-nav" data-hr-view="access" hidden>HR access</button>
+        </nav>
+        <a class="hr-back-link" href="dashboard.html">← Workspace</a>
+      </aside>
+
+      <section class="hr-content">
+        <div class="hr-view active" id="hr-view-overview">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">PEOPLE OPERATIONS</p><h1>HR overview</h1><p>Keep staff records and everyday HR workflows organized.</p></div></div>
+          <div class="hr-stat-grid">
+            <article class="hr-stat"><span>Active people</span><strong id="hr-stat-people">—</strong></article>
+            <article class="hr-stat"><span>Open onboarding tasks</span><strong id="hr-stat-onboarding">—</strong></article>
+            <article class="hr-stat"><span>Leave requests to review</span><strong id="hr-stat-leave">—</strong></article>
+            <article class="hr-stat"><span>Published policies</span><strong id="hr-stat-policies">—</strong></article>
+          </div>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Pending leave</h2><p>Requests waiting for an HR decision.</p></div><button type="button" class="hr-button hr-button-quiet" data-go-view="leave">Review leave</button></div><div id="hr-overview-leave" class="hr-list"></div></section>
+          <p class="hr-privacy-note">Store only information HR needs. This first release does not collect national IDs, bank details, medical records, or payroll data.</p>
+        </div>
+
+        <div class="hr-view" id="hr-view-employees">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">PEOPLE DIRECTORY</p><h1>People</h1><p>Staff, volunteers, interns, and contractors in one roster.</p></div></div>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Add a person</h2><p>Keep this record to basic work information.</p></div></div>
+            <form id="hr-employee-form" class="hr-form hr-form-grid">
+              <label>Full name<input id="hr-employee-name" maxlength="100" autocomplete="name" required /></label>
+              <label>Work email<input id="hr-employee-email" type="email" maxlength="254" autocomplete="email" required /></label>
+              <label>Job title<input id="hr-employee-title" maxlength="100" required /></label>
+              <label>Team or department<input id="hr-employee-team" maxlength="100" /></label>
+              <label>Relationship<select id="hr-employee-type"><option>Employee</option><option>Volunteer</option><option>Intern</option><option>Contractor</option></select></label>
+              <label>Workspace account<select id="hr-employee-account"><option value="">Not linked yet</option></select></label>
+              <label>Start date<input id="hr-employee-start" type="date" /></label>
+              <button class="hr-button" type="submit">Add to people directory</button>
+            </form>
+          </section>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>People directory</h2><p id="hr-employee-count">Loading…</p></div><input id="hr-employee-search" class="hr-search" type="search" placeholder="Search people" aria-label="Search people" /></div><p class="hr-field-note">Link a person to their workspace account to deliver HR updates and private case replies to the right user.</p><div id="hr-employee-list" class="hr-list"></div></section>
+        </div>
+
+        <div class="hr-view" id="hr-view-link-requests">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">ACCOUNT VERIFICATION</p><h1>My HR link requests</h1><p>Review each requester and link them only after confirming the matching employee record.</p></div></div>
+          <section class="hr-panel">
+            <div class="hr-panel-heading"><div><h2>Pending requests</h2><p id="hr-link-request-summary">Loading requests…</p></div></div>
+            <div id="hr-link-request-list" class="hr-list"><div class="hr-list-empty">Loading requests…</div></div>
+          </section>
+        </div>
+
+        <div class="hr-view" id="hr-view-reports">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">PRIVATE HR ↔ SUPER ADMIN</p><h1 id="hr-leadership-title">HR weekly reports</h1><p id="hr-leadership-description">Share progress, priorities, and challenges with HR leadership. Visible only to authorized HR staff and the Super Admin.</p></div></div>
+          <section class="hr-panel" id="hr-weekly-report-panel">
+            <div class="hr-panel-heading"><div><h2>Submit a weekly update</h2><p>Start a private report and discussion for this week.</p></div></div>
+            <form id="hr-report-form" class="hr-form">
+              <div class="hr-form-grid">
+                <label>Week starting<input id="hr-report-week" type="date" required /></label>
+                <label>Current status<select id="hr-report-status"><option value="needs-help">Needs help</option><option value="in-progress">In progress</option><option value="resolved">Resolved</option></select></label>
+              </div>
+              <label>Progress and accomplishments<textarea id="hr-report-accomplishments" rows="3" maxlength="3000" required placeholder="What did HR complete this week?"></textarea></label>
+              <label>Priorities for next week<textarea id="hr-report-priorities" rows="3" maxlength="3000" required placeholder="What are the main priorities?"></textarea></label>
+              <label>Challenges or help needed<textarea id="hr-report-challenges" rows="3" maxlength="3000" required placeholder="Describe blockers or write “None” if there are no current challenges."></textarea></label>
+              <button class="hr-button" type="submit">Submit weekly report</button>
+            </form>
+          </section>
+          <section class="hr-panel" id="hr-help-request-panel" hidden>
+            <div class="hr-panel-heading"><div><h2>Ask the Super Admin for help</h2><p>Send a private request now. The Super Admin and authorized HR staff can reply in its discussion thread.</p></div></div>
+            <form id="hr-help-request-form" class="hr-form">
+              <label>What do you need help with?<input id="hr-help-request-subject" maxlength="140" required placeholder="Briefly describe the issue" /></label>
+              <div class="hr-form-grid">
+                <label>Category
+                  <select id="hr-help-request-category" required>
+                    <option value="workload">Workload</option><option value="staffing">Staffing</option>
+                    <option value="policy">Policy</option><option value="employee-relations">Employee relations</option>
+                    <option value="system-access">System access</option><option value="other">Other</option>
+                  </select>
+                </label>
+                <label>Priority
+                  <select id="hr-help-request-priority" required>
+                    <option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option>
+                  </select>
+                </label>
+                <label>Needed by (optional)<input id="hr-help-request-needed-by" type="date" /></label>
+              </div>
+              <label>Details<textarea id="hr-help-request-message" rows="4" maxlength="4000" required placeholder="Explain the challenge and what support would help."></textarea></label>
+              <label>What support or decision do you need?<textarea id="hr-help-request-support" rows="3" maxlength="2000" required placeholder="Describe the specific action, decision, or resource that would help."></textarea></label>
+              <button class="hr-button" type="submit">Send private help request</button>
+            </form>
+          </section>
+          <div class="hr-reports-layout">
+            <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Reports and follow-ups</h2><p id="hr-report-count">Loading…</p></div></div><div id="hr-report-list" class="hr-list"></div></section>
+            <section class="hr-panel hr-report-thread-panel">
+              <div class="hr-panel-heading"><div><h2 id="hr-report-title">Select a weekly report</h2><p id="hr-report-meta">Private to authorized HR staff and the Super Admin.</p></div><div id="hr-report-status-actions" class="hr-list-actions" hidden></div></div>
+              <div id="hr-report-details" class="hr-report-details"></div>
+              <div id="hr-report-thread" class="hr-case-thread"><div class="hr-list-empty">Choose a report to review its discussion.</div></div>
+              <form id="hr-report-reply-form" class="hr-case-reply" hidden><label for="hr-report-reply">Reply in private discussion</label><textarea id="hr-report-reply" rows="3" maxlength="4000" required></textarea><button class="hr-button" type="submit">Send reply</button></form>
+            </section>
+          </div>
+        </div>
+
+        <div class="hr-view" id="hr-view-cases">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">PRIVATE WORKER SUPPORT</p><h1>Worker messages</h1><p>Reply to individual workers in private HR conversations.</p></div></div>
+          <div class="hr-cases-layout">
+            <section class="hr-panel hr-case-list-panel"><div class="hr-panel-heading"><div><h2>Inbox</h2><p id="hr-case-count">Loading…</p></div></div><div id="hr-case-list" class="hr-list"></div></section>
+            <section class="hr-panel hr-case-thread-panel"><div class="hr-panel-heading"><div><h2 id="hr-case-title">Select a conversation</h2><p id="hr-case-meta">Worker messages are private to HR and the worker.</p></div><div id="hr-case-status-actions" class="hr-list-actions" hidden></div></div><div id="hr-case-thread" class="hr-case-thread"><div class="hr-list-empty">Choose a conversation to read and reply.</div></div><form id="hr-case-reply-form" class="hr-case-reply" hidden><label for="hr-case-reply">Reply to worker</label><textarea id="hr-case-reply" rows="3" maxlength="4000" required></textarea><button class="hr-button" type="submit">Send reply</button></form></section>
+          </div>
+        </div>
+
+        <div class="hr-view" id="hr-view-onboarding">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">FIRST DAYS</p><h1>Onboarding</h1><p>Assign and track practical setup tasks for new team members.</p></div></div>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Create a task</h2><p>Tasks are visible to authorized HR users.</p></div></div>
+            <form id="hr-onboarding-form" class="hr-form hr-form-grid">
+              <label>Person<select id="hr-onboarding-person" required></select></label>
+              <label>Task<input id="hr-onboarding-title" maxlength="140" required placeholder="Prepare workspace access" /></label>
+              <label>Due date<input id="hr-onboarding-due" type="date" /></label>
+              <button class="hr-button" type="submit">Add task</button>
+            </form>
+          </section>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Onboarding tasks</h2><p>Mark tasks complete as each step is finished.</p></div></div><div id="hr-onboarding-list" class="hr-list"></div></section>
+        </div>
+
+        <div class="hr-view" id="hr-view-leave">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">TIME AWAY</p><h1>Leave</h1><p>Record requests and keep approval decisions together.</p></div></div>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Record a leave request</h2><p>HR can enter requests received through your current process.</p></div></div>
+            <form id="hr-leave-form" class="hr-form hr-form-grid">
+              <label>Person<select id="hr-leave-person" required></select></label>
+              <label>Leave type<select id="hr-leave-type"><option>Annual</option><option>Sick</option><option>Family</option><option>Unpaid</option><option>Other</option></select></label>
+              <label>From<input id="hr-leave-start" type="date" required /></label>
+              <label>Through<input id="hr-leave-end" type="date" required /></label>
+              <button class="hr-button" type="submit">Record request</button>
+            </form>
+          </section>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Leave requests</h2><p>Approve or decline pending requests.</p></div></div><div id="hr-leave-list" class="hr-list"></div></section>
+        </div>
+
+        <div class="hr-view" id="hr-view-policies">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">SHARED GUIDANCE</p><h1>Policies</h1><p>Keep current HR policies and internal procedures easy to find.</p></div></div>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Add a policy</h2><p>Only authorized HR users can view this HR workspace library.</p></div></div>
+            <form id="hr-policy-form" class="hr-form">
+              <div class="hr-form-grid"><label>Policy title<input id="hr-policy-title" maxlength="140" required /></label><label>Category<input id="hr-policy-category" maxlength="80" placeholder="Leave, conduct, safety…" /></label></div>
+              <label>Policy text<textarea id="hr-policy-body" rows="7" maxlength="12000" required></textarea></label>
+              <label class="hr-checkbox"><input id="hr-policy-published" type="checkbox" checked /> Publish in the HR library</label>
+              <button class="hr-button" type="submit">Save policy</button>
+            </form>
+          </section>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Policy library</h2><p>Review and update published guidance.</p></div></div><div id="hr-policy-list" class="hr-list"></div></section>
+        </div>
+
+        <div class="hr-view" id="hr-view-access">
+          <div class="hr-page-heading"><div><p class="hr-eyebrow">SUPER ADMIN</p><h1>HR access</h1><p>Invite HR staff with a one-time link that expires after seven days.</p></div></div>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Invite an HR user</h2><p>The person must sign in with this exact, verified email address.</p></div></div>
+            <form id="hr-invite-form" class="hr-form hr-invite-form"><label>Email address<input id="hr-invite-email" type="email" maxlength="254" required /></label><button class="hr-button" type="submit">Create invitation link</button></form>
+            <div id="hr-invite-result" class="hr-invite-result" hidden></div>
+          </section>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Current HR access</h2><p>Revoking access immediately blocks HR data and signs out active sessions.</p></div></div><div id="hr-access-members" class="hr-list"></div></section>
+          <section class="hr-panel"><div class="hr-panel-heading"><div><h2>Pending invitations</h2><p>Unused invitation links expire automatically.</p></div></div><div id="hr-access-invitations" class="hr-list"></div></section>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="firebase-init.js"></script>
+  <script src="hr.js"></script>
+  <script src="visibility-toggle.js"></script>
+</body>
+</html>

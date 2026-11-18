@@ -1,0 +1,89 @@
+.my-hr-page { min-height: 100vh; background: #0b0f13; color: #e6edf3; }
+.my-hr-page [hidden] { display: none !important; }
+.my-hr-app { min-height: 100vh; }
+.my-hr-header { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 28px; border-bottom: 1px solid #26323c; background: #101820; }
+.my-hr-brand, .my-hr-user { display: flex; align-items: center; gap: 12px; }
+.my-hr-brand { color: #f4f7fa; text-decoration: none; }
+.my-hr-brand strong, .my-hr-brand small { display: block; }
+.my-hr-brand small { margin-top: 3px; color: #8b9aab; font-size: 12px; }
+.my-hr-user { color: #a8b5c4; font-size: 12px; }
+.my-hr-user a, .my-hr-card > a { color: #e3c56a; text-decoration: none; }
+.my-hr-mark { width: 42px; height: 42px; display: inline-grid; place-items: center; border: 1px solid rgba(201,168,76,.55); border-radius: 13px; background: linear-gradient(135deg,#183a2c,#101820); color: #e3c56a; font-size: 13px; font-weight: 800; }
+.my-hr-content { width: min(1050px, 100%); margin: 0 auto; padding: 34px clamp(16px,4vw,40px) 60px; }
+.my-hr-heading { margin-bottom: 24px; }
+.my-hr-heading h1 { margin: 7px 0 6px; color: #f4f7fa; font-size: clamp(26px,4vw,34px); }
+.my-hr-heading p:last-child { color: #94a3b3; font-size: 14px; }
+.my-hr-eyebrow { color: #c9a84c; font-size: 10px; font-weight: 800; letter-spacing: .15em; }
+.my-hr-panel { margin: 16px 0; padding: clamp(15px,2.3vw,23px); border: 1px solid #26323c; border-radius: 14px; background: #101820; }
+.my-hr-panel h2 { color: #f1f5f8; font-size: 17px; }
+.my-hr-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.my-hr-panel-heading p, .my-hr-thread-heading p { margin-top: 5px; color: #8fa0b1; font-size: 12px; }
+.my-hr-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.my-hr-grid .my-hr-panel { min-width: 0; }
+.my-hr-profile { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.my-hr-profile-item { display: grid; gap: 5px; padding: 12px; border: 1px solid #26323c; border-radius: 9px; background: #0d141b; }
+.my-hr-profile-item span, .my-hr-list-row small { color: #8fa0b1; font-size: 11px; }
+.my-hr-profile-item strong, .my-hr-list-row strong { color: #eaf0f4; font-size: 13px; overflow-wrap: anywhere; }
+.my-hr-list { display: grid; gap: 8px; }
+.my-hr-list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #26323c; border-radius: 10px; background: #0d141b; }
+.my-hr-list-row > div { min-width: 0; display: grid; gap: 5px; }
+.my-hr-list-row p { color: #bdc8d2; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.my-hr-list-row.unread { border-color: #806a31; background: #17221e; }
+.my-hr-read-label { color: #8fa0b1; font-size: 10px; }
+.my-hr-status { flex: 0 0 auto; padding: 4px 8px; border: 1px solid #806a31; border-radius: 999px; color: #e5cb79; font-size: 10px; text-transform: capitalize; }
+.my-hr-status.complete { border-color: #315743; color: #9cd1ad; }
+.my-hr-status.declined { border-color: #6b3a40; color: #e9a9ae; }
+.my-hr-empty { padding: 16px; border: 1px dashed #35414c; border-radius: 9px; color: #8798a9; font-size: 12px; text-align: center; }
+.my-hr-policy { padding: 13px; border: 1px solid #26323c; border-radius: 10px; background: #0d141b; }
+.my-hr-policy summary { display: flex; justify-content: space-between; gap: 12px; color: #eaf0f4; cursor: pointer; }
+.my-hr-policy summary small { color: #8fa0b1; }
+.my-hr-policy p { margin-top: 12px; color: #bdc8d2; white-space: pre-wrap; font-size: 12px; line-height: 1.7; }
+.my-hr-form { display: grid; gap: 12px; }
+.my-hr-link-status { margin: 14px 0; padding: 12px; border: 1px solid #354451; border-radius: 9px; background: #0d141b; color: #bdc8d2; font-size: 12px; line-height: 1.6; }
+.my-hr-link-status.pending { border-color: #806a31; color: #e5cb79; }
+.my-hr-link-status.rejected { border-color: #6b3a40; color: #e9a9ae; }
+.my-hr-link-status.approved { border-color: #315743; color: #9cd1ad; }
+.my-hr-form label { display: grid; gap: 7px; color: #bdc8d2; font-size: 12px; font-weight: 650; }
+.my-hr-form input, .my-hr-form select, .my-hr-form textarea { width: 100%; min-height: 40px; padding: 9px 11px; border: 1px solid #354451; border-radius: 8px; outline: none; background: #0b1117; color: #ecf1f5; font: inherit; font-size: 13px; }
+.my-hr-form textarea { resize: vertical; }
+.my-hr-form input:focus, .my-hr-form select:focus, .my-hr-form textarea:focus { border-color: #c9a84c; box-shadow: 0 0 0 3px rgba(201,168,76,.12); }
+.my-hr-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.my-hr-button { min-height: 38px; width: fit-content; padding: 8px 13px; border: 1px solid #b89135; border-radius: 8px; background: #c9a84c; color: #101820; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.my-hr-button:disabled { opacity: .6; cursor: wait; }
+.my-hr-button-quiet { border-color: #34414d; background: #18222c; color: #dce4eb; }
+.my-hr-case-layout { display: grid; grid-template-columns: minmax(210px,.8fr) minmax(0,1.4fr); gap: 14px; margin-top: 20px; }
+.my-hr-case-row { width: 100%; display: grid; gap: 6px; padding: 12px; border: 1px solid #26323c; border-radius: 10px; background: #0d141b; color: #eaf0f4; text-align: left; cursor: pointer; }
+.my-hr-case-row:hover, .my-hr-case-row.active { border-color: #806a31; background: #17221e; }
+.my-hr-case-row strong { font-size: 12px; }
+.my-hr-case-row small { color: #8fa0b1; font-size: 10px; }
+.my-hr-thread-panel { min-width: 0; }
+.my-hr-thread-heading { margin-bottom: 12px; }
+.my-hr-thread-heading h3 { color: #eaf0f4; font-size: 14px; }
+.my-hr-thread { min-height: 220px; max-height: 48vh; display: flex; flex-direction: column; gap: 9px; overflow-y: auto; padding: 12px; border: 1px solid #26323c; border-radius: 10px; background: #0b1117; }
+.my-hr-message { max-width: 90%; padding: 11px 13px; border: 1px solid #34414d; border-radius: 11px; background: #18222c; }
+.my-hr-message.from-hr { align-self: flex-end; border-color: #315743; background: #13271e; }
+.my-hr-message.from-worker { align-self: flex-start; }
+.my-hr-message-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #91a2b4; font-size: 10px; }
+.my-hr-message-sender { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.my-hr-message-heading strong { color: #dce4eb; }
+.my-hr-sender-role { padding: 2px 6px; border: 1px solid #516171; border-radius: 999px; color: #c6d1dc; font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.my-hr-sender-role.hr { border-color: #806a31; color: #e5cb79; }
+.my-hr-sender-role.worker { border-color: #315743; color: #9cd1ad; }
+.my-hr-message p { margin-top: 7px; color: #e6edf3; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+.my-hr-reply-form { margin-top: 12px; }
+.my-hr-toast { position: fixed; z-index: 12000; right: 18px; bottom: 18px; max-width: min(440px,calc(100vw - 36px)); padding: 12px 16px; border: 1px solid #3a4b59; border-radius: 10px; background: #18222c; color: #f1f5f8; box-shadow: 0 10px 35px #0008; font-size: 13px; }
+.my-hr-toast.success { border-color: #315743; background: #173024; }
+.my-hr-toast.error { border-color: #8c444a; background: #351d22; }
+.my-hr-gate { min-height: 100vh; display: grid; place-items: center; padding: 20px; background: radial-gradient(circle at 50% 35%,#183a2c 0,#0b0f13 42%); }
+.my-hr-card { width: min(450px,100%); padding: 32px; border: 1px solid #34414d; border-radius: 18px; background: #101820; box-shadow: 0 24px 80px #0008; }
+.my-hr-card .my-hr-mark { margin-bottom: 20px; }
+.my-hr-card h1 { margin: 8px 0; color: #f4f7fa; font-size: 24px; }
+.my-hr-card p:not(.my-hr-eyebrow) { margin-bottom: 20px; color: #9aabba; font-size: 14px; line-height: 1.6; }
+.my-hr-card > a { margin-left: 14px; font-size: 12px; }
+@media (max-width: 680px) {
+  .my-hr-header { padding: 10px 13px; }
+  .my-hr-user { gap: 7px; }
+  .my-hr-user > span { display: none; }
+  .my-hr-grid, .my-hr-profile, .my-hr-form-grid, .my-hr-case-layout { grid-template-columns: 1fr; }
+  .my-hr-panel-heading { align-items: flex-start; flex-wrap: wrap; }
+}

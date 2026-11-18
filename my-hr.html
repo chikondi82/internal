@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Private employee HR workspace." />
+  <title>My HR | Vialifecoach Workspace</title>
+  <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="my-hr.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="my-hr-page">
+  <div id="my-hr-toast" class="my-hr-toast" role="status" aria-live="polite" hidden></div>
+  <main id="my-hr-gate" class="my-hr-gate">
+    <section class="my-hr-card">
+      <span class="my-hr-mark">HR</span>
+      <p class="my-hr-eyebrow">PRIVATE EMPLOYEE SPACE</p>
+      <h1 id="my-hr-gate-title">Checking your sign-in</h1>
+      <p id="my-hr-gate-message">Please wait while we securely load your HR information.</p>
+      <button id="my-hr-gate-action" class="my-hr-button" type="button" hidden></button>
+      <a href="dashboard.html">Back to workspace</a>
+    </section>
+  </main>
+
+  <main id="my-hr-app" class="my-hr-app" hidden>
+    <header class="my-hr-header">
+      <a class="my-hr-brand" href="dashboard.html"><span class="my-hr-mark">HR</span><span><strong>My HR</strong><small>Private employee workspace</small></span></a>
+      <div class="my-hr-user"><span id="my-hr-current-user"></span><a href="dashboard.html">Workspace chat</a><button class="my-hr-button my-hr-button-quiet" type="button" onclick="myHrSignOut()">Sign out</button></div>
+    </header>
+
+    <div class="my-hr-content">
+      <div class="my-hr-heading"><div><p class="my-hr-eyebrow">YOUR HR INFORMATION</p><h1>My HR</h1><p>Your personal work updates, policies, and private conversations with HR.</p></div></div>
+      <div id="my-hr-not-linked" class="my-hr-panel" hidden>
+        <h2>Your workspace account is not linked yet</h2>
+        <p id="my-hr-link-message">Request a secure link to your employee record. HR will verify your details before your HR information is made available.</p>
+        <div id="my-hr-link-status" class="my-hr-link-status" hidden></div>
+        <form id="my-hr-link-form" class="my-hr-form">
+          <label>Message for HR (optional)<textarea id="my-hr-link-note" rows="3" maxlength="1000" placeholder="Add a note to help HR identify your employee record."></textarea></label>
+          <button class="my-hr-button" type="submit">Request My HR access</button>
+        </form>
+      </div>
+      <div id="my-hr-data" hidden>
+        <section class="my-hr-panel">
+          <div class="my-hr-panel-heading"><div><h2>Your work profile</h2><p>Basic employment information held by HR.</p></div></div>
+          <div id="my-hr-profile" class="my-hr-profile"></div>
+        </section>
+
+        <section class="my-hr-panel">
+          <div class="my-hr-panel-heading"><div><h2>Recent HR updates</h2><p id="my-hr-update-count">Live updates for your account.</p></div></div>
+          <div id="my-hr-notifications" class="my-hr-list"></div>
+        </section>
+
+        <div class="my-hr-grid">
+          <section class="my-hr-panel"><div class="my-hr-panel-heading"><div><h2>Onboarding</h2><p>Tasks HR assigned to you.</p></div></div><div id="my-hr-onboarding" class="my-hr-list"></div></section>
+          <section class="my-hr-panel"><div class="my-hr-panel-heading"><div><h2>Leave</h2><p>Requests and decisions recorded by HR.</p></div></div><div id="my-hr-leave" class="my-hr-list"></div></section>
+        </div>
+
+        <section class="my-hr-panel"><div class="my-hr-panel-heading"><div><h2>Published policies</h2><p>Current guidance shared by HR.</p></div></div><div id="my-hr-policies" class="my-hr-list"></div></section>
+
+        <section class="my-hr-panel">
+          <div class="my-hr-panel-heading"><div><h2>Private messages to HR</h2><p>Only you and authorized HR staff can read these conversations.</p></div></div>
+          <form id="my-hr-case-form" class="my-hr-form">
+            <div class="my-hr-form-grid"><label>Subject<input id="my-hr-case-subject" maxlength="140" required /></label><label>Category<select id="my-hr-case-category"><option>Workplace concern</option><option>Leave</option><option>Policy question</option><option>Onboarding</option><option>Other</option></select></label></div>
+            <label>Message<textarea id="my-hr-case-message" rows="4" maxlength="4000" required></textarea></label>
+            <button class="my-hr-button" type="submit">Send private message</button>
+          </form>
+          <div class="my-hr-case-layout">
+            <div id="my-hr-case-list" class="my-hr-list"><div class="my-hr-empty">Loading conversations…</div></div>
+            <div class="my-hr-thread-panel">
+              <div class="my-hr-thread-heading"><div><h3 id="my-hr-thread-title">Select a conversation</h3><p id="my-hr-thread-status">Your messages are private to you and HR.</p></div></div>
+              <div id="my-hr-thread" class="my-hr-thread"><div class="my-hr-empty">Choose a conversation to read and reply.</div></div>
+              <form id="my-hr-reply-form" class="my-hr-form my-hr-reply-form" hidden><label>Reply to HR<textarea id="my-hr-reply" rows="3" maxlength="4000" required></textarea></label><button class="my-hr-button" type="submit">Send reply</button></form>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="firebase-init.js"></script>
+  <script src="my-hr.js"></script>
+</body>
+</html>

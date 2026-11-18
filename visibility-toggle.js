@@ -32,9 +32,9 @@
   toggle.addEventListener('click', function () {
     setHighVisibility(!enabled);
   });
-  var header = document.querySelector('.wk-row');
-  var logoutButton = header && header.querySelector('button[onclick="doLogout()"]');
-  if (header && logoutButton) header.insertBefore(toggle, logoutButton);
+  var header = document.querySelector('.wk-row') || document.querySelector('.hr-topbar');
+  var logoutButton = header && header.querySelector('button[onclick="doLogout()"], button[onclick="hrSignOut()"]');
+  if (logoutButton && logoutButton.parentNode) logoutButton.parentNode.insertBefore(toggle, logoutButton);
   else document.body.appendChild(toggle);
   setHighVisibility(enabled);
 }());

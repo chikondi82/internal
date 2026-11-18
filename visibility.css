@@ -101,7 +101,8 @@ html.high-visibility #visibility-toggle {
   }
 }
 
-.wk-row #visibility-toggle {
+.wk-row #visibility-toggle,
+.hr-topbar #visibility-toggle {
   position: static !important;
   inset: auto !important;
 }

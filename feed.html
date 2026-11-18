@@ -82,6 +82,11 @@
               <span class="hash" aria-hidden="true">◎</span>
               <span class="rname">Reports &amp; evaluations</span>
             </div>
+            <button class="row hr-workspace-link my-hr-link" type="button" onclick="go('my-hr.html')">
+              <span class="hr-link-mark" aria-hidden="true">ME</span>
+              <span class="hr-link-copy"><span class="hr-link-title">My HR</span><span class="hr-link-subtitle">Your updates &amp; support</span></span>
+              <span id="my-hr-unread-badge" class="my-hr-unread-badge" aria-label="Unread HR updates" hidden></span>
+            </button>
             <button class="row workspace-ai-nav" type="button" data-assistant-toggle aria-expanded="false" aria-controls="workspace-ai-panel">
               <span class="hash" aria-hidden="true">✦</span>
               <span class="rname">Workspace Assistant</span>
@@ -183,6 +188,7 @@
 
   <script src="firebase-init.js"></script>
   <script src="feed.js"></script>
+  <script src="hr-nav.js"></script>
   <script src="assistant.js"></script>
   <script src="visibility-toggle.js"></script>
 </body>

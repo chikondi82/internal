@@ -72,6 +72,54 @@ The client retries temporary API gateway failures while Render starts. For
 immediate DM availability after idle periods, keep the Render web service on an
 always-on plan; free instances can sleep and take about a minute to restart.
 
-All app pages include a high visibility toggle in the upper-right corner. Its
-setting is saved in the current browser's local storage and applies across the
-sign-in, dashboard, feed, and reports pages on that browser.
+The high visibility toggle saves its setting in the current browser's local
+storage and applies across the app pages on that browser. It sits beside the
+sign-out control in the dashboard and HR app.
+
+## HR CRM
+
+The private HR app is available at `/hr.html`. Only the Super Admin can create
+HR invitations. Each invitation is a one-time link that expires after seven
+days; the invited person must sign in with the exact invited email and verify
+it before the server grants the separate `hrAccess` role. The Super Admin can
+revoke an invitation or HR access from the app. HR access is independent from
+workspace-admin access.
+
+The HR workspace includes a people directory, onboarding task tracking, leave
+request recording and approvals, a policy library, HR access management, and a
+private worker-message inbox. Workers use **My HR** in the workspace to see
+their linked work profile, onboarding tasks, leave updates, published policies,
+notifications, and private case conversations. Notifications and case
+messages update live while the worker is signed in; unread notifications remain
+available when they return. While in the main workspace, workers also see an
+unread badge and alert for new HR updates. Workers can submit and reply to
+cases, and HR replies appear in that worker's thread. HR changes are tied to a
+worker only after HR links the employee record to that person's workspace
+account.
+
+HR staff also have an **HR leadership** dropdown inside the private HR CRM.
+It provides weekly reports for sharing accomplishments, upcoming priorities,
+and challenges, plus a direct **Ask for help** option for starting a private
+support discussion at any time. Help requests include a category, priority,
+optional needed-by date, and the specific support or decision requested. Both
+use private reply threads and follow-up statuses for the Super Admin and
+authorized HR staff only; workspace admins without HR access and employees
+cannot read or write these reports. This is separate from employee My HR and
+worker support cases.
+
+Workers whose workspace account is not yet linked to an HR employee record can
+request My HR access from the My HR page. The request is visible to authorized
+HR staff and the Super Admin, who must select the matching unlinked employee
+record to approve it or provide a reason to reject it. Only approval links the
+account and unlocks employee HR data. Link requests are written through the
+authenticated server API; Firestore clients cannot create or modify them.
+
+The worker view does not expose the HR directory or other workers' records.
+HR-only employee, onboarding, and leave records remain restricted to enabled
+HR accounts and the Super Admin; case conversations are readable only by HR
+and the case's worker, and only published policies are visible to workers.
+Payroll, bank details, government IDs, and medical records are out of scope.
+Publish the updated `firestore.rules`, deploy the Netlify redirects and
+`server.js` API, and make sure the server has valid Firebase Admin credentials
+before using the connected workflows in production. In-app updates require an
+active signed-in session; email or push delivery is not configured.

@@ -13,6 +13,14 @@ service cloud.firestore {
                 && get(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true));
     }
 
+    function isHr() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && (isSuperAdmin()
+            || (exists(/databases/$(database)/documents/hrAccess/$(request.auth.uid))
+                && get(/databases/$(database)/documents/hrAccess/$(request.auth.uid)).data.enabled == true));
+    }
+
     function isDmException(userId) {
       return exists(/databases/$(database)/documents/workspaceConfig/dmAccessExceptions)
         && userId in get(/databases/$(database)/documents/workspaceConfig/dmAccessExceptions).data.uids;
@@ -119,6 +127,81 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.enabled is bool;
       allow delete: if isSuperAdmin();
+    }
+
+    match /hrAccess/{userId} {
+      allow get: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId);
+      allow list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /hrEmployees/{employeeId} {
+      allow read, write: if isHr();
+    }
+
+    match /hrLinkRequests/{userId} {
+      allow get: if isHr() || (request.auth != null && request.auth.uid == userId);
+      allow list: if isHr();
+      allow create, update, delete: if false;
+    }
+
+    match /hrNotifications/{userId}/items/{itemId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+        && request.resource.data.isRead is bool;
+      allow create, delete: if false;
+    }
+
+    match /hrOnboarding/{taskId} {
+      allow read, write: if isHr();
+    }
+
+    match /hrLeaveRequests/{requestId} {
+      allow read, write: if isHr();
+    }
+
+    match /hrPolicies/{policyId} {
+      allow read: if isHr() || (request.auth != null && resource.data.published == true);
+      allow write: if isHr();
+    }
+
+    match /hrCases/{caseId} {
+      allow read: if isHr()
+        || (request.auth != null && resource.data.employeeUid == request.auth.uid);
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isHr()
+          || (request.auth != null
+              && get(/databases/$(database)/documents/hrCases/$(caseId)).data.employeeUid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /hrAdminReports/{reportId} {
+      allow read: if isHr();
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isHr();
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /hrAuditLogs/{entryId} {
+      allow read: if isHr();
+      allow create: if isHr()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.action is string
+        && request.resource.data.entityType is string
+        && request.resource.data.entityId is string;
+      allow update, delete: if false;
+    }
+
+    match /hrInvitations/{inviteId} {
+      allow read, write: if false;
     }
 
     match /workspaceConfig/{configId} {

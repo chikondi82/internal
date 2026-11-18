@@ -1,4 +1,10 @@
 [[redirects]]
+  from = "/api/hr/*"
+  to = "https://internal-uwi1.onrender.com/api/hr/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/workspace/dm/*"
   to = "https://internal-uwi1.onrender.com/api/workspace/dm/:splat"
   status = 200

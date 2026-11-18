@@ -109,6 +109,15 @@
               <span class="hash" aria-hidden="true">⚙</span>
               <span class="rname">Manage accounts</span>
             </button>
+            <button class="row hr-workspace-link hr-crm-link" id="hr-crm-nav" type="button" style="display:none" onclick="window.location.href='hr.html'">
+              <span class="hr-link-mark" aria-hidden="true">HR</span>
+              <span class="hr-link-copy"><span class="hr-link-title">HR CRM</span><span class="hr-link-subtitle">People operations</span></span>
+            </button>
+            <button class="row hr-workspace-link my-hr-link" type="button" onclick="window.location.href='my-hr.html'">
+              <span class="hr-link-mark" aria-hidden="true">ME</span>
+              <span class="hr-link-copy"><span class="hr-link-title">My HR</span><span class="hr-link-subtitle">Your updates &amp; support</span></span>
+              <span id="my-hr-unread-badge" class="my-hr-unread-badge" aria-label="Unread HR updates" hidden></span>
+            </button>
             <div class="row on" onclick="window.location.href='dashboard.html'">
               <span class="hash" style="display:flex;align-items:center;justify-content:center">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -238,6 +247,7 @@
   <script src="firebase-init.js"></script>
   <script src="chat.js"></script>
   <script src="admin-users.js"></script>
+  <script src="hr-nav.js"></script>
   <script src="assistant.js"></script>
   <script src="visibility-toggle.js?v=20261008-header-toggle"></script>
 </body>

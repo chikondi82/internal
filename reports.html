@@ -24,6 +24,7 @@
         <a href="dashboard.html"><span>◉</span>Workspace Chat</a>
         <a href="feed.html"><span>▤</span>Company Feed</a>
         <a class="active" href="reports.html"><span>▧</span>Reports &amp; evaluations</a>
+        <a class="reports-hr-link" href="my-hr.html"><span class="reports-hr-mark" aria-hidden="true">ME</span><span class="reports-hr-copy"><strong>My HR</strong><small>Your updates &amp; support</small></span><span id="my-hr-unread-badge" class="my-hr-unread-badge" aria-label="Unread HR updates" hidden></span></a>
       </nav>
       <div class="reports-sidebar-note">Private team space<br /><small>Vialifecoach Global Foundation</small></div>
     </aside>
@@ -100,6 +101,7 @@
   <div id="reports-loading" class="reports-loading-screen"><div class="reports-spinner"></div><p>Loading secure reports…</p></div>
   <dialog id="report-viewer" class="report-viewer"><div class="report-viewer-head"><div><b id="report-viewer-title">Document preview</b><span id="report-viewer-type"></span></div><button type="button" class="btn report-viewer-close" onclick="closeReportViewer()">Close</button></div><div id="report-viewer-content" class="report-viewer-content"></div></dialog>
   <script src="firebase-init.js"></script>
+  <script src="hr-nav.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js" referrerpolicy="no-referrer"></script>
   <script src="reports.js"></script>
   <script src="admin-users.js"></script>

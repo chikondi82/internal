@@ -83,6 +83,13 @@ function doGoogle() {
 auth.onAuthStateChanged(function (user) {
   if (user) {
     me = user;
+    var returnToHr = '';
+    try { returnToHr = sessionStorage.getItem('hr-return-to') || ''; } catch (_) {}
+    if (returnToHr.indexOf('hr.html') === 0) {
+      try { sessionStorage.removeItem('hr-return-to'); } catch (_) {}
+      window.location.href = returnToHr;
+      return;
+    }
     window.location.href = 'dashboard.html';
   }
 });
