@@ -1875,7 +1875,14 @@ async function sendVgfEmail(to, subject, html, textBody) {
     try { response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to: [to], subject, html, text: textBody })
+        body: JSON.stringify({
+            from,
+            to: [to],
+            reply_to: process.env.VGF_EMAIL_REPLY_TO || 'info@vialifecoach.org',
+            subject,
+            html,
+            text: textBody
+        })
     }); } catch (error) {
         console.error('VGF notification email request failed:', error.message);
         return { sent: false, reason: 'email_provider_error' };

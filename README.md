@@ -108,7 +108,7 @@ proxy to Netlify, and `firestore.rules`, `storage.rules`, and
 `firestore.indexes.json` to Firebase. Configure Firebase Authentication email
 and password sign-in, authorize the public app domain, and configure the
 Firebase Admin service account and Storage bucket on Render. Add `RESEND_API_KEY`,
-`VGF_EMAIL_FROM`, and `VGF_APP_ORIGIN` to the Render environment so registration,
+`VGF_EMAIL_FROM`, `VGF_EMAIL_REPLY_TO`, and `VGF_APP_ORIGIN` to the Render environment so registration,
 verification, password reset, invitations and application notifications can
 send mail. `VGF_APP_ORIGIN` must be the deployed public origin. See `.env.example`
 for the variable names; keep actual credentials in the deployment secret store.
