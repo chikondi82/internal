@@ -238,6 +238,77 @@ fieldset,
   text-transform: capitalize;
 }
 
+.admin-flow-step[hidden],
+.admin-page[hidden] {
+  display: none !important;
+}
+
+.admin-step-flow {
+  display: grid;
+  gap: 16px;
+}
+
+.flow-step-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--vgf-border);
+}
+
+.flow-step-heading h3 {
+  margin: 0;
+  color: var(--vgf-text-strong);
+  font-size: 16px;
+}
+
+.flow-progress {
+  flex: none;
+  color: var(--vgf-gold-light);
+  background: var(--vgf-green-soft);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.flow-step-content {
+  display: grid;
+  gap: 13px;
+}
+
+.flow-step-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 13px;
+  border-top: 1px solid var(--vgf-border);
+}
+
+.flow-step-controls:has(button:only-child) {
+  justify-content: flex-end;
+}
+
+.record-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 4px;
+}
+
+.record-pagination span {
+  color: var(--vgf-muted);
+  text-align: center;
+  font-size: 11px;
+}
+
+.record-pagination button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
   .admin-sidebar {
     background: #10161d;

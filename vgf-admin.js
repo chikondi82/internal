@@ -7,6 +7,49 @@
   var settingsTranslations = { privacyNotice: {}, dataRetention: {} };
   var emailTemplates = {};
   var $ = function (id) { return document.getElementById(id); };
+  var programmeFlow = null;
+
+  function createSteppedFlow(container, groups, titles) {
+    var flow = document.createElement('div'); flow.className = 'admin-step-flow';
+    var steps = [];
+    groups.forEach(function (nodes, index) {
+      var step = document.createElement('section'); step.className = 'admin-flow-step'; step.hidden = true;
+      var heading = document.createElement('div'); heading.className = 'flow-step-heading';
+      var title = document.createElement('h3'); title.textContent = titles[index];
+      var progress = document.createElement('span'); progress.className = 'flow-progress'; progress.textContent = 'Step ' + (index + 1) + ' of ' + groups.length;
+      heading.append(title, progress); var body = document.createElement('div'); body.className = 'flow-step-content';
+      nodes.forEach(function (node) { body.appendChild(node); });
+      var controls = document.createElement('div'); controls.className = 'flow-step-controls';
+      if (index > 0) {
+        var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'secondary'; previous.textContent = 'Previous';
+        previous.addEventListener('click', function () { setStep(index - 1); }); controls.appendChild(previous);
+      }
+      if (index < groups.length - 1) {
+        var next = document.createElement('button'); next.type = 'button'; next.className = 'primary'; next.textContent = 'Continue';
+        next.addEventListener('click', function () {
+          var invalid = body.querySelector(':invalid:not(:disabled)');
+          if (invalid) { invalid.reportValidity(); return; }
+          setStep(index + 1);
+        }); controls.appendChild(next);
+      }
+      step.append(heading, body, controls); flow.appendChild(step); steps.push({ element: step, body: body });
+    });
+    container.appendChild(flow);
+    var currentStep = 0;
+    function setStep(index) {
+      currentStep = Math.max(0, Math.min(index, steps.length - 1));
+      steps.forEach(function (step, stepIndex) {
+        var active = stepIndex === currentStep; step.element.hidden = !active;
+        step.body.querySelectorAll('input,select,textarea,button').forEach(function (control) {
+          if (!control.hasAttribute('data-flow-disabled')) control.dataset.flowDisabled = control.disabled ? 'true' : 'false';
+          control.disabled = !active || control.dataset.flowDisabled === 'true';
+        });
+      });
+      flow.dataset.currentStep = String(currentStep + 1);
+    }
+    setStep(0);
+    return { go: setStep, getIndex: function () { return currentStep; }, count: steps.length };
+  }
 
   var adminPages = {
     overview: ['Overview', 'A clear view of programmes, applications and partner activity.'],
@@ -69,6 +112,18 @@
     place(programmePanel, 'programmes'); place(programmeRecords, 'programmes');
     place(partnerPanel, 'partners'); place(applicationRecords, 'applications'); place(accessPanel, 'access');
     place(reportPanel, 'reports'); place(settingsPanel, 'settings'); place(auditPanel, 'audit');
+
+    var programmeChildren = programmeForm ? Array.from(programmeForm.children).filter(function (node) { return !(node.matches('input[type="hidden"]')); }) : [];
+    if (programmeForm && programmeChildren.length >= 14) programmeFlow = createSteppedFlow(programmeForm, [programmeChildren.slice(0, 6), programmeChildren.slice(6, 12), programmeChildren.slice(12)], ['Programme details', 'Application form', 'Partners & publishing']);
+    if (accessPanel) {
+      var accessList = accessPanel.querySelector('#access-list'); var repForm = accessPanel.querySelector('#representative-form'); var repList = accessPanel.querySelector('#representative-list');
+      createSteppedFlow(accessPanel, [[accessForm, accessList], [repForm, repList]], ['Programme permissions', 'Representatives']);
+    }
+    if (settingsForm) {
+      var migration = settingsPanel.querySelector('.migration-box'); if (migration) settingsForm.appendChild(migration);
+      var settingsChildren = Array.from(settingsForm.children);
+      if (settingsChildren.length >= 10) createSteppedFlow(settingsForm, [settingsChildren.slice(0, 4), settingsChildren.slice(4, 9), settingsChildren.slice(9)], ['Privacy & retention', 'Notification emails', 'Workspace access']);
+    }
 
     var overview = content.querySelector('[data-admin-page="overview"]');
     var welcome = document.createElement('section'); welcome.className = 'panel overview-welcome';
@@ -138,6 +193,27 @@
     return el;
   }
 
+  function renderPagedRecords(list, items, renderItem, emptyMessage, pageSize) {
+    if (!list) return;
+    if (list._pager) { list._pager.remove(); list._pager = null; }
+    list._renderPage = function () { renderPagedRecords(list, items, renderItem, emptyMessage, pageSize); };
+    list.replaceChildren();
+    if (!items.length) { addText(list, 'p', emptyMessage, 'empty'); return; }
+    pageSize = pageSize || 8;
+    var pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+    var page = Math.min(Math.max(1, Number(list.dataset.page) || 1), pageCount);
+    list.dataset.page = String(page);
+    items.slice((page - 1) * pageSize, page * pageSize).forEach(function (item, index) { renderItem(item, (page - 1) * pageSize + index); });
+    if (pageCount < 2) return;
+    var pager = document.createElement('div'); pager.className = 'record-pagination';
+    var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'secondary'; previous.textContent = 'Previous'; previous.disabled = page === 1;
+    var label = document.createElement('span'); label.textContent = 'Page ' + page + ' of ' + pageCount + ' · ' + items.length + ' records';
+    var next = document.createElement('button'); next.type = 'button'; next.className = 'secondary'; next.textContent = 'Next'; next.disabled = page === pageCount;
+    previous.addEventListener('click', function () { list.dataset.page = String(page - 1); list._renderPage(); });
+    next.addEventListener('click', function () { list.dataset.page = String(page + 1); list._renderPage(); });
+    pager.append(previous, label, next); list.insertAdjacentElement('afterend', pager); list._pager = pager;
+  }
+
   function renderPartners() {
     var checks = $('partner-checklist');
     var list = $('partner-list');
@@ -152,9 +228,7 @@
       label.append(input, document.createTextNode(partner.name));
       checks.appendChild(label);
     });
-    list.replaceChildren();
-    if (!partners.length) addText(list, 'p', 'No partner organisations have been added.', 'empty');
-    partners.forEach(function (partner) {
+    renderPagedRecords(list, partners, function (partner) {
       var row = document.createElement('article'); row.className = 'record';
       var info = document.createElement('div');
       addText(info, 'strong', partner.name);
@@ -164,7 +238,7 @@
       var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'edit'; edit.textContent = 'Edit';
       edit.addEventListener('click', function () { fillPartner(partner); });
       actions.appendChild(edit); row.append(info, actions); list.appendChild(row);
-    });
+    }, 'No partner organisations have been added.', 6);
     ['access-partner', 'rep-partner'].forEach(function (id) {
       var select = $(id); if (!select) return;
       var current = select.value; select.replaceChildren();
@@ -231,9 +305,8 @@
   }
 
   function renderProgrammes() {
-    var list = $('programme-list'); list.replaceChildren();
-    if (!programmes.length) return addText(list, 'p', 'No programmes yet. Create the first programme above.', 'empty');
-    programmes.forEach(function (programme) {
+    var list = $('programme-list');
+    renderPagedRecords(list, programmes, function (programme) {
       var row = document.createElement('article'); row.className = 'record';
       var info = document.createElement('div');
       addText(info, 'strong', programme.name);
@@ -249,7 +322,7 @@
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'delete'; remove.textContent = 'Delete';
       remove.addEventListener('click', function () { deleteProgramme(programme); });
       actions.append(edit, remove); row.append(info, actions); list.appendChild(row);
-    });
+    }, 'No programmes yet. Create the first programme above.', 6);
   }
 
   function load() {
@@ -268,9 +341,11 @@
     $('programme-form').reset(); $('programme-id').value = '';
     $('programme-heading').textContent = 'Create a programme';
     $('question-builder').replaceChildren(); $('document-builder').replaceChildren();
+    if (programmeFlow) programmeFlow.go(0);
   }
 
   function fillProgramme(item) {
+    if (programmeFlow) programmeFlow.go(0);
     $('programme-id').value = item.id;
     $('programme-name').value = item.name || '';
     $('programme-description').value = item.description || '';
@@ -360,31 +435,29 @@
   });
 
   function renderAccess() {
-    var list = $('access-list'); if (!list) return; list.replaceChildren();
+    var list = $('access-list'); if (!list) return;
     var programId = $('access-programme').value; var partnerId = $('access-partner').value;
     var grant = grants.find(function (item) { return item.programmeId === programId && item.partnerId === partnerId; });
     document.querySelectorAll('[name="access-permission"]').forEach(function (box) { box.checked = !!(grant && grant.enabled && grant.permissions.includes(box.value)); });
-    if (!grants.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No partner permissions have been configured.'; list.appendChild(empty); return; }
-    grants.forEach(function (item) {
+    var visibleGrants = grants.filter(function (item) { return programmes.some(function (value) { return value.id === item.programmeId; }) && partners.some(function (value) { return value.id === item.partnerId; }); });
+    renderPagedRecords(list, visibleGrants, function (item) {
       var program = programmes.find(function (value) { return value.id === item.programmeId; }); var partner = partners.find(function (value) { return value.id === item.partnerId; });
-      if (!program || !partner) return;
       var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div');
       var title = document.createElement('strong'); title.textContent = partner.name + ' · ' + program.name;
       var detail = document.createElement('p'); detail.textContent = (item.enabled ? (item.permissions || []).join(', ') || 'No permissions' : 'Revoked'); info.append(title, detail); row.appendChild(info); list.appendChild(row);
-    });
+    }, 'No partner permissions have been configured.', 6);
   }
 
   function renderRepresentatives() {
-    var list = $('representative-list'); if (!list) return; list.replaceChildren();
-    if (!representatives.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No partner representatives have been invited.'; list.appendChild(empty); return; }
-    representatives.forEach(function (person) {
+    var list = $('representative-list'); if (!list) return;
+    renderPagedRecords(list, representatives, function (person) {
       var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div');
       var name = document.createElement('strong'); name.textContent = person.name || person.email || person.uid;
       var detail = document.createElement('p'); var partner = partners.find(function (item) { return item.id === person.partnerId; }); detail.textContent = (person.email || '') + ' · ' + (partner ? partner.name : 'Unknown organisation') + ' · ' + person.role + ' · ' + (person.enabled ? 'Active' : 'Suspended'); info.append(name, detail); row.appendChild(info);
       var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = person.enabled ? 'delete' : 'edit'; toggle.textContent = person.enabled ? 'Suspend' : 'Activate';
       toggle.addEventListener('click', function () { request('/partners/' + encodeURIComponent(person.partnerId) + '/representatives/' + encodeURIComponent(person.uid) + '/access', { enabled: !person.enabled }, 'POST').then(load).catch(function (error) { notice(error.message); }); });
       row.appendChild(toggle); list.appendChild(row);
-    });
+    }, 'No partner representatives have been invited.', 6);
   }
 
   function loadApplications() {
@@ -393,16 +466,15 @@
   }
 
   function renderApplications() {
-    var list = $('application-list'); if (!list) return; list.replaceChildren();
-    if (!applications.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No matching applications.'; list.appendChild(empty); return; }
-    applications.forEach(function (application) {
+    var list = $('application-list'); if (!list) return;
+    renderPagedRecords(list, applications, function (application) {
       var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div');
       var title = document.createElement('strong'); title.textContent = application.applicantName + ' · ' + (application.reference || 'Draft');
       var desc = document.createElement('p'); desc.textContent = application.programmeName + ' · ' + application.applicantEmail;
       var status = document.createElement('span'); status.className = 'status-chip'; status.textContent = application.status.replace(/_/g, ' '); info.append(title, desc, status);
       var actions = document.createElement('div'); actions.className = 'record-actions'; var view = document.createElement('button'); view.type = 'button'; view.className = 'edit'; view.textContent = 'Review';
       view.addEventListener('click', function () { showApplicationReview(application, row); }); actions.appendChild(view); row.append(info, actions); list.appendChild(row);
-    });
+    }, 'No matching applications.', 6);
   }
 
   function showApplicationReview(summary, row) {
@@ -410,19 +482,21 @@
       var app = data.application; var detail = document.createElement('div'); detail.className = 'review-detail';
       var answers = document.createElement('dl'); answers.className = 'answer-list';
       Object.keys(app.answers || {}).forEach(function (key) { var term = document.createElement('dt'); term.textContent = key; var value = document.createElement('dd'); value.textContent = String(app.answers[key]); answers.append(term, value); });
-      detail.appendChild(answers);
-      (app.documents || []).forEach(function (doc) { var button = document.createElement('button'); button.type = 'button'; button.className = 'edit'; button.textContent = 'Download ' + doc.label; button.addEventListener('click', function () { downloadDocument(app.id, doc).catch(function (error) { notice(error.message); }); }); detail.appendChild(button); });
+      var documentList = document.createElement('div'); documentList.className = 'review-document-list';
+      (app.documents || []).forEach(function (doc) { var button = document.createElement('button'); button.type = 'button'; button.className = 'edit'; button.textContent = 'Download ' + doc.label; button.addEventListener('click', function () { downloadDocument(app.id, doc).catch(function (error) { notice(error.message); }); }); documentList.appendChild(button); });
       var program = programmes.find(function (item) { return item.id === app.programmeId; });
       var reviewerChoices = representatives.filter(function (person) { return person.enabled && program && (program.partnerIds || []).indexOf(person.partnerId) !== -1 && grants.some(function (grant) { return grant.programmeId === program.id && grant.partnerId === person.partnerId && grant.enabled && grant.permissions.includes('review_applications'); }); });
       var assignment = document.createElement('div'); assignment.className = 'review-controls'; var reviewer = document.createElement('select'); var unassigned = document.createElement('option'); unassigned.value = ''; unassigned.textContent = 'Unassigned'; reviewer.appendChild(unassigned);
       reviewerChoices.forEach(function (person) { var option = document.createElement('option'); option.value = person.uid; option.textContent = person.name || person.email; reviewer.appendChild(option); }); reviewer.value = app.assignedReviewerUid || '';
-      var assign = document.createElement('button'); assign.type = 'button'; assign.className = 'secondary'; assign.textContent = 'Assign reviewer'; assign.addEventListener('click', function () { request('/applications/' + encodeURIComponent(app.id) + '/assign', { reviewerUid: reviewer.value }, 'POST').then(function () { notice('Reviewer assignment saved.', 'success'); }).catch(function (error) { notice(error.message); }); }); assignment.append(reviewer, assign); detail.appendChild(assignment);
+      var assign = document.createElement('button'); assign.type = 'button'; assign.className = 'secondary'; assign.textContent = 'Assign reviewer'; assign.addEventListener('click', function () { request('/applications/' + encodeURIComponent(app.id) + '/assign', { reviewerUid: reviewer.value }, 'POST').then(function () { notice('Reviewer assignment saved.', 'success'); }).catch(function (error) { notice(error.message); }); }); assignment.append(reviewer, assign);
       var statusRow = document.createElement('div'); statusRow.className = 'review-controls'; var select = document.createElement('select');
       ['submitted','under_review','shortlisted','accepted','rejected','waitlisted','withdrawn'].forEach(function (value) { var option = document.createElement('option'); option.value = value; option.textContent = value.replace(/_/g, ' '); select.appendChild(option); }); select.value = app.status;
-      var save = document.createElement('button'); save.type = 'button'; save.className = 'primary'; save.textContent = 'Update status'; save.addEventListener('click', function () { request('/applications/' + encodeURIComponent(app.id) + '/status', { status: select.value }, 'POST').then(function () { notice('Status updated.', 'success'); loadApplications(); }).catch(function (error) { notice(error.message); }); }); statusRow.append(select, save); detail.appendChild(statusRow);
-      (app.internalNotes || []).forEach(function (note) { var p = document.createElement('p'); p.className = 'record-meta'; p.textContent = note.name + ': ' + note.text; detail.appendChild(p); });
-      (app.partnerComments || []).forEach(function (note) { var p = document.createElement('p'); p.className = 'record-meta'; p.textContent = 'Partner comment · ' + note.name + ': ' + note.text; detail.appendChild(p); });
-      var noteForm = document.createElement('form'); noteForm.className = 'note-form'; var noteInput = document.createElement('textarea'); noteInput.required = true; noteInput.maxLength = 3000; noteInput.placeholder = 'Internal review note'; var noteButton = document.createElement('button'); noteButton.type = 'submit'; noteButton.className = 'secondary'; noteButton.textContent = 'Add internal note'; noteForm.append(noteInput, noteButton); noteForm.addEventListener('submit', function (event) { event.preventDefault(); request('/applications/' + encodeURIComponent(app.id) + '/notes', { note: noteInput.value }, 'POST').then(function () { notice('Note added.', 'success'); showApplicationReview(summary, row); }).catch(function (error) { notice(error.message); }); }); detail.appendChild(noteForm);
+      var save = document.createElement('button'); save.type = 'button'; save.className = 'primary'; save.textContent = 'Update status'; save.addEventListener('click', function () { request('/applications/' + encodeURIComponent(app.id) + '/status', { status: select.value }, 'POST').then(function () { notice('Status updated.', 'success'); loadApplications(); }).catch(function (error) { notice(error.message); }); }); statusRow.append(select, save);
+      var notesPanel = document.createElement('div'); notesPanel.className = 'review-notes-list';
+      (app.internalNotes || []).forEach(function (note) { var p = document.createElement('p'); p.className = 'record-meta'; p.textContent = note.name + ': ' + note.text; notesPanel.appendChild(p); });
+      (app.partnerComments || []).forEach(function (note) { var p = document.createElement('p'); p.className = 'record-meta'; p.textContent = 'Partner comment · ' + note.name + ': ' + note.text; notesPanel.appendChild(p); });
+      var noteForm = document.createElement('form'); noteForm.className = 'note-form'; var noteInput = document.createElement('textarea'); noteInput.required = true; noteInput.maxLength = 3000; noteInput.placeholder = 'Internal review note'; var noteButton = document.createElement('button'); noteButton.type = 'submit'; noteButton.className = 'secondary'; noteButton.textContent = 'Add internal note'; noteForm.append(noteInput, noteButton); noteForm.addEventListener('submit', function (event) { event.preventDefault(); request('/applications/' + encodeURIComponent(app.id) + '/notes', { note: noteInput.value }, 'POST').then(function () { notice('Note added.', 'success'); showApplicationReview(summary, row); }).catch(function (error) { notice(error.message); }); });
+      createSteppedFlow(detail, [[answers, documentList], [assignment, statusRow], [notesPanel, noteForm]], ['Application details', 'Reviewer & decision', 'Notes & comments']);
       row.appendChild(detail);
     }).catch(function (error) { notice(error.message); });
   }
@@ -460,7 +534,7 @@
     }).catch(function (error) { notice(error.message); });
   }
   function loadAudit() {
-    request('/admin/audit').then(function (data) { var list = $('audit-list'); list.replaceChildren(); (data.entries || []).forEach(function (entry) { var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div'); var title = document.createElement('strong'); title.textContent = entry.action; var detail = document.createElement('p'); detail.textContent = entry.actorEmail + ' · ' + entry.entityType + ' ' + entry.entityId; info.append(title, detail); row.appendChild(info); list.appendChild(row); }); if (!list.children.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No activity logged yet.'; list.appendChild(empty); } }).catch(function (error) { notice(error.message); });
+    request('/admin/audit').then(function (data) { var list = $('audit-list'); renderPagedRecords(list, data.entries || [], function (entry) { var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div'); var title = document.createElement('strong'); title.textContent = entry.action; var detail = document.createElement('p'); detail.textContent = entry.actorEmail + ' · ' + entry.entityType + ' ' + entry.entityId; info.append(title, detail); row.appendChild(info); list.appendChild(row); }, 'No activity logged yet.', 8); }).catch(function (error) { notice(error.message); });
   }
   $('settings-form').addEventListener('submit', function (event) { event.preventDefault(); request('/admin/settings', {
     translations: (storeSettingsLocale(), settingsTranslations), contactEmail: $('settings-contact').value,
