@@ -4237,7 +4237,7 @@ table {
   display: none;
 }
 
-.sect-body .hr-workspace-link {
+.sect-body .workspace-service-link {
   min-height: 55px;
   gap: 10px;
   margin: 5px 3px;
@@ -4249,8 +4249,8 @@ table {
   text-align: left;
 }
 
-.sect-body .hr-workspace-link:hover,
-.sect-body .hr-workspace-link:focus-visible {
+.sect-body .workspace-service-link:hover,
+.sect-body .workspace-service-link:focus-visible {
   border-color: rgba(201, 168, 76, .65);
   background: linear-gradient(110deg, rgba(31, 78, 56, .72), rgba(24, 35, 44, .96));
   color: #fff;
@@ -4295,11 +4295,11 @@ table {
   white-space: nowrap;
 }
 
-.sect-body .hr-workspace-link .my-hr-unread-badge {
+.sect-body .workspace-service-link .my-hr-unread-badge {
   flex: 0 0 auto;
 }
 
-.sect-body .hr-workspace-link:focus-visible {
+.sect-body .workspace-service-link:focus-visible {
   outline: 2px solid #e3c56a;
   outline-offset: 2px;
 }
