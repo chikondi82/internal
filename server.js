@@ -1755,6 +1755,41 @@ app.post('/api/vgf/partners', async (req, res) => {
     }
 });
 
+app.post('/api/vgf/partners/:id/delete', async (req, res) => {
+    const context = await getVgfAdminContext(req, res, 'delete a VGF partner organisation');
+    if (!context) return;
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid partner organisation.' });
+    try {
+        const { firestore, claims } = context;
+        const partnerRef = firestore.collection('vgfPartners').doc(req.params.id);
+        const partner = await partnerRef.get();
+        if (!partner.exists) return res.status(404).json({ error: 'Partner organisation not found.' });
+        const [programmes, grants, members] = await Promise.all([
+            firestore.collection('vgfProgrammes').where('partnerIds', 'array-contains', req.params.id).get(),
+            firestore.collection('vgfProgrammeAccess').where('partnerId', '==', req.params.id).get(),
+            firestore.collection('vgfMemberships').where('partnerId', '==', req.params.id).get()
+        ]);
+        const operations = [];
+        programmes.docs.forEach((doc) => operations.push((batch) => batch.update(doc.ref, {
+            partnerIds: (doc.data().partnerIds || []).filter((id) => id !== req.params.id),
+            updatedAt: FieldValue.serverTimestamp(), updatedBy: claims.sub
+        })));
+        grants.docs.forEach((doc) => operations.push((batch) => batch.delete(doc.ref)));
+        members.docs.forEach((doc) => operations.push((batch) => batch.update(doc.ref, { enabled: false, disabledAt: FieldValue.serverTimestamp(), disabledBy: claims.sub })));
+        operations.push((batch) => batch.delete(partnerRef));
+        for (let start = 0; start < operations.length; start += 450) {
+            const batch = firestore.batch();
+            operations.slice(start, start + 450).forEach((apply) => apply(batch));
+            await batch.commit();
+        }
+        await writeVgfAudit(firestore, claims, 'partner.deleted', 'partner', req.params.id);
+        return res.json({ deleted: true, disabledRepresentatives: members.size });
+    } catch (error) {
+        console.error('VGF partner deletion failed:', error);
+        return res.status(503).json({ error: 'Could not delete this partner organisation.' });
+    }
+});
+
 app.post('/api/vgf/programmes/:id/delete', async (req, res) => {
     const context = await getVgfAdminContext(req, res, 'delete a VGF programme');
     if (!context) return;

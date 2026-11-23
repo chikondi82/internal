@@ -59,6 +59,11 @@
     }
   }
   $('partner-login').addEventListener('submit', function (event) { event.preventDefault(); auth.signInWithEmailAndPassword($('partner-email').value.trim(), $('partner-password').value).then(function (credential) { signedIn(credential.user); }).catch(function (error) { notice(error.message); }); });
+  $('partner-reset-password').addEventListener('click', function () {
+    var email = $('partner-email').value.trim();
+    if (!email) { notice('Enter your invitation email address first.'); $('partner-email').focus(); return; }
+    auth.sendPasswordResetEmail(email).then(function () { notice('If this address has a VGF account, a password reset email has been sent.', 'success'); }).catch(function () { notice('Could not send a reset email. Check the address or contact the VGF Super Admin.'); });
+  });
   $('partner-rep-form').addEventListener('submit', function (event) { event.preventDefault(); api('/partner/representatives', { name: $('partner-rep-name').value, email: $('partner-rep-email').value, role: $('partner-rep-role').value }, 'POST').then(function () { $('partner-rep-form').reset(); notice('Representative invitation sent.', 'success'); loadRepresentatives(); }).catch(function (error) { notice(error.message); }); });
   $('partner-signout').addEventListener('click', function () { auth.signOut(); }); $('partner-refresh').addEventListener('click', load); auth.onAuthStateChanged(signedIn);
   $('partner-rep-refresh').addEventListener('click', loadRepresentatives);

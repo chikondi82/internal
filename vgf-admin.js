@@ -237,7 +237,14 @@
       var actions = document.createElement('div'); actions.className = 'record-actions';
       var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'edit'; edit.textContent = 'Edit';
       edit.addEventListener('click', function () { fillPartner(partner); });
-      actions.appendChild(edit); row.append(info, actions); list.appendChild(row);
+      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'delete'; remove.textContent = 'Delete organisation';
+      remove.addEventListener('click', function () {
+        if (!window.confirm('Delete "' + partner.name + '"? This revokes its programme access and disables its representatives. Applications and uploaded documents will be retained.')) return;
+        request('/partners/' + encodeURIComponent(partner.id) + '/delete', {}, 'POST')
+          .then(function () { notice('Partner organisation deleted and access revoked.', 'success'); return load(); })
+          .catch(function (error) { notice(error.message); });
+      });
+      actions.append(edit, remove); row.append(info, actions); list.appendChild(row);
     }, 'No partner organisations have been added.', 6);
     ['access-partner', 'rep-partner'].forEach(function (id) {
       var select = $(id); if (!select) return;
