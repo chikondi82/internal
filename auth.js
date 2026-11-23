@@ -11,6 +11,10 @@ function clearErrs() {
 }
 
 function switchTab(mode) {
+  if (mode === 'signup') {
+    window.location.href = 'vgf-applicant.html';
+    return;
+  }
   authMode = mode;
   G('tl').classList.toggle('on', mode === 'login');
   G('ts').classList.toggle('on', mode === 'signup');
@@ -36,6 +40,7 @@ function forgotPw() {
 }
 
 function doAuth() {
+  if (authMode === 'signup') { window.location.href = 'vgf-applicant.html'; return; }
   clearErrs();
   var email = G('iemail').value.trim();
   var pass = G('ipass').value;
@@ -83,13 +88,24 @@ function doGoogle() {
 auth.onAuthStateChanged(function (user) {
   if (user) {
     me = user;
-    var returnToHr = '';
-    try { returnToHr = sessionStorage.getItem('hr-return-to') || ''; } catch (_) {}
-    if (returnToHr.indexOf('hr.html') === 0) {
-      try { sessionStorage.removeItem('hr-return-to'); } catch (_) {}
-      window.location.href = returnToHr;
-      return;
-    }
-    window.location.href = 'dashboard.html';
+    user.getIdTokenResult(true).then(function (token) {
+      if (token.claims.vgfApplicant === true) { window.location.href = 'vgf-applicant.html'; return; }
+      if (token.claims.vgfPartner === true) { window.location.href = 'vgf-partner.html'; return; }
+      if (token.claims.vgfWorkspace === true || currentUserIsSuperAdmin()) {
+        var returnToHr = '';
+        try { returnToHr = sessionStorage.getItem('hr-return-to') || ''; } catch (_) {}
+        if (returnToHr.indexOf('hr.html') === 0) {
+          try { sessionStorage.removeItem('hr-return-to'); } catch (_) {}
+          window.location.href = returnToHr;
+          return;
+        }
+        window.location.href = '/dashboard';
+        return;
+      }
+      db.collection('workspaceAdmins').doc(user.uid).get().then(function (role) {
+        if (role.exists && role.data().enabled === true) window.location.href = '/dashboard';
+        else auth.signOut().then(function () { toast('This account has no access to the staff workspace. Applicants and partners can use their dedicated portals.'); });
+      }).catch(function () { auth.signOut().then(function () { toast('This account has no access to the staff workspace.'); }); });
+    }).catch(function () { auth.signOut(); });
   }
 });

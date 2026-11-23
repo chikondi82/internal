@@ -76,6 +76,54 @@ The high visibility toggle saves its setting in the current browser's local
 storage and applies across the app pages on that browser. It sits beside the
 sign-out control in the dashboard and HR app.
 
+## Vialifecoach Global Foundation application platform
+
+The VGF platform is integrated into the existing Netlify, Firebase and Render
+deployment. Public visitors can browse published opportunities at
+`/programmes.html`, register or sign in at `/vgf-applicant.html`, complete a
+localized dynamic application, save drafts, upload private supporting
+documents, submit, track status, read notifications and withdraw an
+application. Programme application forms support English, French, Kiswahili,
+Kirundi and Kinyarwanda. Partner users use `/vgf-partner.html` to review only
+applications for programmes assigned to their organization, subject to their
+membership role and per-programme permissions. The verified Super Admin uses
+`/vgf-admin.html` to manage programmes, form questions, document requirements,
+partner assignments, representatives, review decisions, analytics, audit
+records, privacy/retention notices and localized email templates.
+
+All privileged VGF operations go through `/api/vgf/*` in `server.js`. Firestore
+stores application records, grants and audit history; uploaded files are kept
+in private Cloud Storage paths. The API checks Firebase ID tokens, role claims,
+applicant ownership, partner membership, programme grants and reviewer
+assignment before returning records or files. Applicant and partner accounts
+are isolated from internal workspace APIs and collections. VGF Firestore
+records are not directly writable by browser clients. Application submission
+requires the selected language's privacy notice and retention text to be
+configured by the administrator.
+
+### Deployment and service configuration
+
+Deploy the updated `server.js` to Render, the static pages and `/api/vgf/*`
+proxy to Netlify, and `firestore.rules`, `storage.rules`, and
+`firestore.indexes.json` to Firebase. Configure Firebase Authentication email
+and password sign-in, authorize the public app domain, and configure the
+Firebase Admin service account and Storage bucket on Render. Add `RESEND_API_KEY`,
+`VGF_EMAIL_FROM`, and `VGF_APP_ORIGIN` to the Render environment so registration,
+verification, password reset, invitations and application notifications can
+send mail. `VGF_APP_ORIGIN` must be the deployed public origin. See `.env.example`
+for the variable names; keep actual credentials in the deployment secret store.
+
+After deploying the restrictive Firestore rules, existing internal staff need
+the `vgfWorkspace` custom claim. Sign in as Super Admin at `/vgf-admin.html`,
+preview the account migration, review the eligible count, then confirm it.
+Applicants, partner representatives and VGF memberships are excluded. Newly
+invited workspace accounts receive the claim through the existing server
+invitation flow. Staff need to sign out and sign back in after claims change.
+The administrator must also configure the privacy notice, retention statement,
+contact email and notification templates in each language the platform will
+use before opening applications. Archive programmes instead of deleting ones
+with application history.
+
 ## HR CRM
 
 The private HR app is available at `/hr.html`. Only the Super Admin can create

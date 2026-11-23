@@ -1,0 +1,65 @@
+(function () {
+  var user = null;
+  var $ = function (id) { return document.getElementById(id); };
+  function notice(message, type) { var el = $('partner-notice'); el.textContent = message; el.className = 'notice ' + (type || 'error'); el.hidden = false; }
+  function api(path, body, method) {
+    return user.getIdToken().then(function (token) { var options = { method: method || 'GET', headers: { Authorization: 'Bearer ' + token } }; if (body) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); } return fetch('/api/vgf' + path, options); })
+      .then(function (response) { return response.json().catch(function () { return {}; }).then(function (data) { if (!response.ok) throw new Error(data.error || 'Could not load partner records.'); return data; }); });
+  }
+  function downloadDocument(applicationId, docInfo) {
+    return user.getIdToken().then(function (token) { return fetch('/api/vgf/applications/' + encodeURIComponent(applicationId) + '/documents/' + encodeURIComponent(docInfo.id) + '/download', { headers: { Authorization: 'Bearer ' + token } }); })
+      .then(function (response) { if (!response.ok) return response.json().then(function (data) { throw new Error(data.error || 'Could not download this document.'); }); return response.blob(); })
+      .then(function (blob) { var url = URL.createObjectURL(blob); var link = window.document.createElement('a'); link.href = url; link.download = docInfo.label || 'supporting-document'; link.click(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000); });
+  }
+  function render(items) {
+    var parent = $('partner-applications'); parent.replaceChildren();
+    var list = document.createElement('div'); list.className = 'record-list'; parent.appendChild(list);
+    if (!items.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No applications are available to your organisation.'; list.appendChild(empty); return; }
+    items.forEach(function (item) {
+      var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div');
+      var title = document.createElement('strong'); title.textContent = item.applicantName + ' · ' + (item.reference || 'Application');
+      var detail = document.createElement('p'); detail.textContent = item.programmeName + ' · ' + String(item.status).replace(/_/g, ' ');
+      info.append(title, detail); var review = document.createElement('button'); review.type = 'button'; review.className = 'edit'; review.textContent = 'Review'; review.addEventListener('click', function () { showDetail(item, row); }); row.append(info, review); list.appendChild(row);
+    });
+  }
+  function showDetail(item, row) {
+    api('/applications/' + encodeURIComponent(item.id)).then(function (data) {
+      var application = data.application; var detail = document.createElement('div'); detail.className = 'review-detail';
+      var answers = document.createElement('dl'); answers.className = 'answer-list';
+      Object.keys(application.answers || {}).forEach(function (key) { var term = document.createElement('dt'); term.textContent = key; var value = document.createElement('dd'); value.textContent = String(application.answers[key]); answers.append(term, value); }); detail.appendChild(answers);
+      (application.partnerComments || []).forEach(function (comment) { var p = document.createElement('p'); p.className = 'record-meta'; p.textContent = comment.name + ': ' + comment.text; detail.appendChild(p); });
+      (application.documents || []).forEach(function (doc) { var download = document.createElement('button'); download.type = 'button'; download.className = 'edit'; download.textContent = 'Download ' + doc.label; download.addEventListener('click', function () { downloadDocument(item.id, doc).catch(function (error) { notice(error.message); }); }); detail.appendChild(download); });
+      if ((item.permissions || []).includes('update_status')) {
+        var statusForm = document.createElement('form'); statusForm.className = 'review-controls'; var status = document.createElement('select');
+        ['under_review','shortlisted','accepted','rejected','waitlisted'].forEach(function (value) { var option = document.createElement('option'); option.value = value; option.textContent = value.replace(/_/g, ' '); status.appendChild(option); }); status.value = application.status;
+        var update = document.createElement('button'); update.type = 'submit'; update.className = 'primary'; update.textContent = 'Update status'; statusForm.append(status, update); statusForm.addEventListener('submit', function (event) { event.preventDefault(); api('/applications/' + encodeURIComponent(item.id) + '/status', { status: status.value }, 'POST').then(function () { notice('Application status updated.', 'success'); load(); }).catch(function (error) { notice(error.message); }); }); detail.appendChild(statusForm);
+      }
+      if ((item.permissions || []).includes('add_comments')) {
+        var noteForm = document.createElement('form'); noteForm.className = 'note-form'; var note = document.createElement('textarea'); note.required = true; note.maxLength = 3000; note.placeholder = 'Review comment'; var add = document.createElement('button'); add.type = 'submit'; add.className = 'secondary'; add.textContent = 'Add comment'; noteForm.append(note, add); noteForm.addEventListener('submit', function (event) { event.preventDefault(); api('/applications/' + encodeURIComponent(item.id) + '/notes', { note: note.value }, 'POST').then(function () { notice('Comment saved.', 'success'); showDetail(item, row); }).catch(function (error) { notice(error.message); }); }); detail.appendChild(noteForm);
+      }
+      row.appendChild(detail);
+    }).catch(function (error) { notice(error.message); });
+  }
+  function load() { return api('/partner/applications').then(function (data) { render(data.applications || []); }).catch(function (error) { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice(error.message); }); }
+  function loadRepresentatives() { return api('/partner/representatives').then(function (data) {
+    var list = $('partner-representatives'); list.replaceChildren();
+    (data.representatives || []).forEach(function (person) { var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div'); var name = document.createElement('strong'); name.textContent = person.name || person.email; var description = document.createElement('p'); description.textContent = person.email + ' · ' + person.role.replace(/_/g, ' ') + ' · ' + (person.enabled ? 'Active' : 'Suspended'); info.append(name, description); var action = document.createElement('button'); action.type = 'button'; action.className = person.enabled ? 'delete' : 'edit'; action.textContent = person.enabled ? 'Suspend' : 'Activate'; action.disabled = person.uid === user.uid; action.addEventListener('click', function () { api('/partner/representatives/' + encodeURIComponent(person.uid) + '/access', { enabled: !person.enabled }, 'POST').then(loadRepresentatives).catch(function (error) { notice(error.message); }); }); row.append(info, action); list.appendChild(row); });
+    if (!(data.representatives || []).length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No representatives yet.'; list.appendChild(empty); }
+  }).catch(function (error) { notice(error.message); }); }
+  function signedIn(nextUser) {
+    user = nextUser; $('partner-auth').hidden = !!user; $('partner-dashboard').hidden = !user; $('partner-signout').hidden = !user;
+    if (user) {
+      user.getIdTokenResult(true).then(function (token) {
+        if (token.claims.vgfApplicant === true) { window.location.href = 'vgf-applicant.html'; return; }
+        if (token.claims.vgfWorkspace === true || String(user.email || '').toLowerCase() === 'chikondigahimbare@gmail.com') { window.location.href = '/dashboard'; return; }
+        if (token.claims.vgfPartner !== true) { auth.signOut().then(function () { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice('This account is not registered as a VGF partner representative.'); }); return; }
+      }).catch(function () { auth.signOut(); });
+      if (!user.emailVerified) { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice('Verify your email address before using partner access.'); return; }
+      api('/partner/context').then(function (context) { $('partner-org-name').textContent = context.organisation || ''; $('partner-rep-management').hidden = !context.canManageRepresentatives; if (context.canManageRepresentatives) loadRepresentatives(); load(); }).catch(function (error) { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice(error.message); });
+    }
+  }
+  $('partner-login').addEventListener('submit', function (event) { event.preventDefault(); auth.signInWithEmailAndPassword($('partner-email').value.trim(), $('partner-password').value).then(function (credential) { signedIn(credential.user); }).catch(function (error) { notice(error.message); }); });
+  $('partner-rep-form').addEventListener('submit', function (event) { event.preventDefault(); api('/partner/representatives', { name: $('partner-rep-name').value, email: $('partner-rep-email').value, role: $('partner-rep-role').value }, 'POST').then(function () { $('partner-rep-form').reset(); notice('Representative invitation sent.', 'success'); loadRepresentatives(); }).catch(function (error) { notice(error.message); }); });
+  $('partner-signout').addEventListener('click', function () { auth.signOut(); }); $('partner-refresh').addEventListener('click', load); auth.onAuthStateChanged(signedIn);
+  $('partner-rep-refresh').addEventListener('click', loadRepresentatives);
+}());

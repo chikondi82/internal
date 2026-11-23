@@ -105,6 +105,10 @@
             <span class="sect-title">Workspace</span>
           </div>
           <div class="sect-body">
+            <button class="row" id="vgf-programme-nav" type="button" style="display:none" onclick="window.location.href='vgf-admin.html'">
+              <span class="hash" aria-hidden="true">VGF</span>
+              <span class="rname">Programme management</span>
+            </button>
             <button class="row" id="user-management-open" type="button" style="display:none" onclick="openUserManagement()">
               <span class="hash" aria-hidden="true">⚙</span>
               <span class="rname">Manage accounts</span>
@@ -118,7 +122,7 @@
               <span class="hr-link-copy"><span class="hr-link-title">My HR</span><span class="hr-link-subtitle">Your updates &amp; support</span></span>
               <span id="my-hr-unread-badge" class="my-hr-unread-badge" aria-label="Unread HR updates" hidden></span>
             </button>
-            <div class="row on" onclick="window.location.href='dashboard.html'">
+            <div class="row on" onclick="window.location.href='/dashboard'">
               <span class="hash" style="display:flex;align-items:center;justify-content:center">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
               </span>
@@ -245,6 +249,7 @@
   </div>
 
   <script src="firebase-init.js"></script>
+  <script src="vgf-nav.js"></script>
   <script src="chat.js"></script>
   <script src="admin-users.js"></script>
   <script src="hr-nav.js"></script>

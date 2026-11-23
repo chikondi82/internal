@@ -6,15 +6,25 @@ service cloud.firestore {
         && request.auth.token.email == 'chikondigahimbare@gmail.com';
     }
 
-    function isAdmin() {
+    function isWorkspaceMember() {
       return request.auth != null
+        && (isSuperAdmin()
+            || request.auth.token.vgfWorkspace == true
+            || (exists(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid))
+                && get(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true)
+            || (exists(/databases/$(database)/documents/hrAccess/$(request.auth.uid))
+                && get(/databases/$(database)/documents/hrAccess/$(request.auth.uid)).data.enabled == true));
+    }
+
+    function isAdmin() {
+      return isWorkspaceMember()
         && (isSuperAdmin()
             || (exists(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid))
                 && get(/databases/$(database)/documents/workspaceAdmins/$(request.auth.uid)).data.enabled == true));
     }
 
     function isHr() {
-      return request.auth != null
+      return isWorkspaceMember()
         && request.auth.token.email_verified == true
         && (isSuperAdmin()
             || (exists(/databases/$(database)/documents/hrAccess/$(request.auth.uid))
@@ -29,7 +39,7 @@ service cloud.firestore {
     function hasSameDmGroup(peerUid) {
       let myAssignment = /databases/$(database)/documents/orgAssignments/$(request.auth.uid);
       let peerAssignment = /databases/$(database)/documents/orgAssignments/$(peerUid);
-      return request.auth != null
+      return isWorkspaceMember()
         && exists(myAssignment)
         && exists(peerAssignment)
         && get(myAssignment).data.groupId is string
@@ -51,7 +61,7 @@ service cloud.firestore {
 
     function canUseDirectMessage(convId) {
       let participants = convId.split('_');
-      return request.auth != null
+      return isWorkspaceMember()
         && participants.size() == 2
         && request.auth.uid in participants
         && (isAdmin()
@@ -61,7 +71,7 @@ service cloud.firestore {
     }
 
     function canReadInternReport(report) {
-      return request.auth != null
+      return isWorkspaceMember()
         && (isAdmin()
             || report.authorUid == request.auth.uid
             || report.currentReviewerUid == request.auth.uid
@@ -70,7 +80,7 @@ service cloud.firestore {
 
     function canAccessChannel(channelId) {
       let channel = get(/databases/$(database)/documents/channels/$(channelId)).data;
-      return request.auth != null
+      return isWorkspaceMember()
         && (isAdmin()
             || channelId in ['general', 'random', 'announcements']
             || channel.createdBy == request.auth.uid
@@ -79,7 +89,7 @@ service cloud.firestore {
     }
 
     function canAccessSubgroup(channelId, subgroupId) {
-      return request.auth != null
+      return isWorkspaceMember()
         && (isAdmin()
             || (canAccessChannel(channelId)
                 && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
@@ -90,15 +100,15 @@ service cloud.firestore {
 
 
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow read: if isWorkspaceMember();
+      allow create: if isWorkspaceMember()
         && request.auth.uid == userId
         && request.resource.data.uid == userId
         && request.resource.data.email is string;
-      allow update: if request.auth != null
+      allow update: if isWorkspaceMember()
         && (request.auth.uid == userId
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
-      allow delete: if request.auth != null
+      allow delete: if isWorkspaceMember()
         && (request.auth.uid == userId
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
     }
@@ -111,18 +121,18 @@ service cloud.firestore {
     }
 
     match /dmRequests/{convId} {
-      allow read: if request.auth != null
+      allow read: if isWorkspaceMember()
         && (resource.data.senderUid == request.auth.uid
             || resource.data.recipientUid == request.auth.uid);
       allow create, update, delete: if false;
     }
 
     match /groups/{groupId}/messages/{msgId} {
-      allow read, create, delete: if request.auth != null;
+      allow read, create, delete: if isWorkspaceMember();
     }
 
     match /workspaceAdmins/{userId} {
-      allow read: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId);
+      allow read: if isSuperAdmin() || (isWorkspaceMember() && request.auth.uid == userId);
       allow create, update: if isSuperAdmin()
         && request.resource.data.uid == userId
         && request.resource.data.enabled is bool;
@@ -130,7 +140,7 @@ service cloud.firestore {
     }
 
     match /hrAccess/{userId} {
-      allow get: if isSuperAdmin() || (request.auth != null && request.auth.uid == userId);
+      allow get: if isSuperAdmin() || (isWorkspaceMember() && request.auth.uid == userId);
       allow list: if isSuperAdmin();
       allow create, update, delete: if false;
     }
@@ -140,14 +150,14 @@ service cloud.firestore {
     }
 
     match /hrLinkRequests/{userId} {
-      allow get: if isHr() || (request.auth != null && request.auth.uid == userId);
+      allow get: if isHr() || (isWorkspaceMember() && request.auth.uid == userId);
       allow list: if isHr();
       allow create, update, delete: if false;
     }
 
     match /hrNotifications/{userId}/items/{itemId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null
+      allow read: if isWorkspaceMember() && request.auth.uid == userId;
+      allow update: if isWorkspaceMember()
         && request.auth.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
         && request.resource.data.isRead is bool;
@@ -163,18 +173,18 @@ service cloud.firestore {
     }
 
     match /hrPolicies/{policyId} {
-      allow read: if isHr() || (request.auth != null && resource.data.published == true);
+      allow read: if isHr() || (isWorkspaceMember() && resource.data.published == true);
       allow write: if isHr();
     }
 
     match /hrCases/{caseId} {
       allow read: if isHr()
-        || (request.auth != null && resource.data.employeeUid == request.auth.uid);
+        || (isWorkspaceMember() && resource.data.employeeUid == request.auth.uid);
       allow create, update, delete: if false;
 
       match /messages/{messageId} {
         allow read: if isHr()
-          || (request.auth != null
+          || (isWorkspaceMember()
               && get(/databases/$(database)/documents/hrCases/$(caseId)).data.employeeUid == request.auth.uid);
         allow create, update, delete: if false;
       }
@@ -205,7 +215,7 @@ service cloud.firestore {
     }
 
     match /workspaceConfig/{configId} {
-      allow read: if request.auth != null;
+      allow read: if isWorkspaceMember();
       allow create, update: if isSuperAdmin()
         && ((configId == 'founder'
              && request.resource.data.uid == request.auth.uid)
@@ -219,7 +229,7 @@ service cloud.firestore {
     }
 
     match /orgGroups/{groupId} {
-      allow read: if request.auth != null;
+      allow read: if isWorkspaceMember();
       allow create: if isAdmin()
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0;
@@ -227,7 +237,7 @@ service cloud.firestore {
     }
 
     match /orgAssignments/{userId} {
-      allow read: if request.auth != null
+      allow read: if isWorkspaceMember()
         && (request.auth.uid == userId
             || isAdmin()
             || resource.data.supervisorUid == request.auth.uid);
@@ -242,7 +252,7 @@ service cloud.firestore {
 
     match /internReports/{reportId} {
       allow read: if canReadInternReport(resource.data);
-      allow create: if request.auth != null
+      allow create: if isWorkspaceMember()
         && request.resource.data.authorUid == request.auth.uid
         && request.resource.data.status == 'submitted'
         && request.resource.data.title is string
@@ -255,7 +265,7 @@ service cloud.firestore {
             || request.resource.data.currentReviewerUid == get(/databases/$(database)/documents/workspaceConfig/founder).data.uid)
         && request.resource.data.reviewerUids == [request.resource.data.currentReviewerUid];
       allow update: if isSuperAdmin()
-        || (request.auth != null
+        || (isWorkspaceMember()
             && resource.data.currentReviewerUid == request.auth.uid
             && request.resource.data.authorUid == resource.data.authorUid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentReviewerUid', 'reviewerUids', 'updatedAt'])
@@ -273,7 +283,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
       match /reviews/{reviewId} {
         allow read: if canReadInternReport(get(/databases/$(database)/documents/internReports/$(reportId)).data);
-        allow create: if request.auth != null
+        allow create: if isWorkspaceMember()
           && get(/databases/$(database)/documents/internReports/$(reportId)).data.currentReviewerUid == request.auth.uid
           && request.resource.data.reviewerUid == request.auth.uid
           && request.resource.data.action in ['reviewed', 'forwarded'];
@@ -282,7 +292,7 @@ service cloud.firestore {
     }
 
     match /channels/{channelId} {
-      allow read: if request.auth != null;
+      allow read: if isWorkspaceMember();
       allow create: if isAdmin()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.visibility in ['public', 'private']
@@ -293,12 +303,12 @@ service cloud.firestore {
             || request.resource.data.visibility == 'public');
       allow delete: if isAdmin()
           && !(channelId in ['general', 'random', 'announcements'])
-        || (request.auth != null
+        || (isWorkspaceMember()
             && !(channelId in ['general', 'random', 'announcements'])
             && resource.data.createdBy == request.auth.uid);
       match /members/{userId} {
-        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin() || canAccessChannel(channelId));
-        allow create: if request.auth != null
+        allow read: if isWorkspaceMember() && (request.auth.uid == userId || isAdmin() || canAccessChannel(channelId));
+        allow create: if isWorkspaceMember()
           && request.resource.data.uid == userId
           && (isAdmin()
               || (request.auth.uid == userId
@@ -306,8 +316,8 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
       match /requests/{userId} {
-        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-        allow create: if request.auth != null
+        allow read: if isWorkspaceMember() && (request.auth.uid == userId || isAdmin());
+        allow create: if isWorkspaceMember()
           && request.auth.uid == userId
           && !(channelId in ['general', 'random', 'announcements'])
           && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
@@ -331,14 +341,14 @@ service cloud.firestore {
           && request.resource.data.visibility in ['public', 'private']
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'description', 'visibility']);
         match /requests/{userId} {
-          allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-          allow create: if request.auth != null
+          allow read: if isWorkspaceMember() && (request.auth.uid == userId || isAdmin());
+          allow create: if isWorkspaceMember()
             && request.auth.uid == userId
             && canAccessChannel(channelId)
             && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
             && get(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(subgroupId)).data.get('visibility', 'public') == 'private'
             && request.resource.data.uid == userId;
-          allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+          allow delete: if isWorkspaceMember() && (request.auth.uid == userId || isAdmin());
         }
         match /messages/{msgId} {
           allow read, create: if canAccessSubgroup(channelId, subgroupId);
@@ -347,12 +357,12 @@ service cloud.firestore {
         }
       }
       match /subgroupAssignments/{userId} {
-        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin()
+        allow read: if isWorkspaceMember() && (request.auth.uid == userId || isAdmin()
           || (canAccessChannel(channelId)
               && resource.data.subgroupId is string
               && exists(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid))
               && get(/databases/$(database)/documents/channels/$(channelId)/subgroupAssignments/$(request.auth.uid)).data.subgroupId == resource.data.subgroupId));
-        allow create, update: if request.auth != null
+        allow create, update: if isWorkspaceMember()
           && (request.auth.uid == userId || isAdmin())
           && canAccessChannel(channelId)
           && get(/databases/$(database)/documents/channels/$(channelId)).data.visibility == 'private'
@@ -361,7 +371,7 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(request.resource.data.subgroupId))
           && (isAdmin()
               || get(/databases/$(database)/documents/channels/$(channelId)/subgroups/$(request.resource.data.subgroupId)).data.get('visibility', 'public') == 'public');
-        allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow delete: if isWorkspaceMember() && (request.auth.uid == userId || isAdmin());
       }
     }
     match /channels/{channelId}/messages/{msgId} {
@@ -371,11 +381,11 @@ service cloud.firestore {
     }
 
     match /posts/{postId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow read: if isWorkspaceMember();
+      allow create: if isWorkspaceMember()
         && request.resource.data.authorUid == request.auth.uid
         && request.resource.data.get('authorEmail', request.auth.token.email) == request.auth.token.email;
-      allow update: if request.auth != null
+      allow update: if isWorkspaceMember()
         && ((request.auth.uid == resource.data.authorUid
              && request.resource.data.authorUid == resource.data.authorUid
              && request.resource.data.get('authorEmail', '') == resource.data.get('authorEmail', ''))
@@ -384,7 +394,7 @@ service cloud.firestore {
                 && request.auth.token.email == resource.data.get('authorEmail', '')
                 && request.resource.data.get('authorUid', '') == '')
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
-      allow delete: if request.auth != null
+      allow delete: if isWorkspaceMember()
         && (request.auth.uid == resource.data.authorUid
             || (resource.data.get('authorUid', '') == ''
                 && request.auth.token.email != null
@@ -392,8 +402,8 @@ service cloud.firestore {
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
     }
     match /posts/{postId}/comments/{commentId} {
-      allow read, create: if request.auth != null;
-      allow delete: if request.auth != null
+      allow read, create: if isWorkspaceMember();
+      allow delete: if isWorkspaceMember()
         && (request.auth.uid == resource.data.authorUid
             || request.auth.uid == resource.data.postAuthorUid
             || request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.get('authorUid', '')
@@ -403,8 +413,25 @@ service cloud.firestore {
             || request.auth.token.email == 'chikondigahimbare@gmail.com');
     }
 
+    // VGF records are written and listed only by the authenticated server API.
+    // An applicant can get only their own application so Storage rules can
+    // verify ownership while they upload supporting documents.
+    match /vgfApplications/{applicationId} {
+      allow get: if request.auth != null && request.auth.token.vgfApplicant == true && resource.data.applicantUid == request.auth.uid;
+      allow list, create, update, delete: if false;
+    }
+    match /vgfProgrammes/{programmeId} { allow read, write: if false; }
+    match /vgfPartners/{partnerId} { allow read, write: if false; }
+    match /vgfMemberships/{userId} { allow read, write: if false; }
+    match /vgfProgrammeAccess/{grantId} { allow read, write: if false; }
+    match /vgfNotifications/{notificationId} { allow read, write: if false; }
+    match /vgfAuditLogs/{entryId} { allow read, write: if false; }
+    match /vgfCounters/{counterId} { allow read, write: if false; }
+    match /vgfApplicationLocks/{lockId} { allow read, write: if false; }
+    match /vgfSettings/{settingId} { allow read, write: if false; }
+
     match /{document=**} {
-      allow read, write: if request.auth != null
+      allow read, write: if isWorkspaceMember()
         && request.auth.token.email == 'chikondigahimbare@gmail.com';
     }
   }

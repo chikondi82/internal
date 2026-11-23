@@ -1,4 +1,14 @@
 [[redirects]]
+  from = "/dashboard.html"
+  to = "/dashboard"
+  status = 301
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/dashboard.html"
+  status = 200
+
+[[redirects]]
   from = "/api/hr/*"
   to = "https://internal-uwi1.onrender.com/api/hr/:splat"
   status = 200
@@ -25,6 +35,12 @@
 [[redirects]]
   from = "/api/workspace/users/sync"
   to = "https://internal-uwi1.onrender.com/api/workspace/users/sync"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/vgf/*"
+  to = "https://internal-uwi1.onrender.com/api/vgf/:splat"
   status = 200
   force = true
 

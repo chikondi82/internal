@@ -236,6 +236,14 @@ var FIRESTORE_RULES_TEXT = ''
   + '      allow read, create: if request.auth != null;\n'
   + '      allow delete: if request.auth != null && (request.auth.uid == resource.data.authorUid || request.auth.uid == resource.data.postAuthorUid || request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.get(\'authorUid\', \'\') || (get(/databases/$(database)/documents/posts/$(postId)).data.get(\'authorUid\', \'\') == \'\' && request.auth.token.email != null && request.auth.token.email == get(/databases/$(database)/documents/posts/$(postId)).data.get(\'authorEmail\', \'\')) || request.auth.token.email == \'chikondigahimbare@gmail.com\');\n'
   + '    }\n'
+  + '    match /vgfApplications/{applicationId} { allow get: if request.auth != null && resource.data.applicantUid == request.auth.uid; allow list, create, update, delete: if false; }\n'
+  + '    match /vgfProgrammes/{programmeId} { allow read, write: if false; }\n'
+  + '    match /vgfPartners/{partnerId} { allow read, write: if false; }\n'
+  + '    match /vgfMemberships/{userId} { allow read, write: if false; }\n'
+  + '    match /vgfProgrammeAccess/{grantId} { allow read, write: if false; }\n'
+  + '    match /vgfNotifications/{notificationId} { allow read, write: if false; }\n'
+  + '    match /vgfAuditLogs/{entryId} { allow read, write: if false; }\n'
+  + '    match /vgfCounters/{counterId} { allow read, write: if false; }\n'
   + '    match /{document=**} { allow read, write: if request.auth != null && request.auth.token.email == \'chikondigahimbare@gmail.com\'; }\n'
   + '  }\n'
   + '}\n';
@@ -258,6 +266,13 @@ var STORAGE_RULES_TEXT = ''
   + '      allow read: if canReadReportFile() || (request.auth != null && request.auth.uid == authorUid && !reportExists());\n'
   + '      allow create: if request.auth != null && request.auth.uid == authorUid && !reportExists() && request.resource.size <= 20 * 1024 * 1024 && request.resource.contentType in [\'application/pdf\', \'application/vnd.openxmlformats-officedocument.wordprocessingml.document\'];\n'
   + '      allow update, delete: if request.auth != null && request.auth.uid == authorUid && !reportExists();\n'
+  + '    }\n'
+  + '    match /vgfApplications/{userId}/{applicationId}/{fileId} {\n'
+  + '      function ownsDraft() { return request.auth != null && request.auth.uid == userId && firestore.exists(/databases/(default)/documents/vgfApplications/$(applicationId)) && firestore.get(/databases/(default)/documents/vgfApplications/$(applicationId)).data.applicantUid == userId && firestore.get(/databases/(default)/documents/vgfApplications/$(applicationId)).data.status == \'draft\'; }\n'
+  + '      function ownsApplication() { return request.auth != null && request.auth.uid == userId && firestore.exists(/databases/(default)/documents/vgfApplications/$(applicationId)) && firestore.get(/databases/(default)/documents/vgfApplications/$(applicationId)).data.applicantUid == userId; }\n'
+  + '      allow read: if ownsApplication();\n'
+  + '      allow create: if ownsDraft() && request.resource.size <= 10 * 1024 * 1024 && request.resource.contentType in [\'application/pdf\', \'application/vnd.openxmlformats-officedocument.wordprocessingml.document\', \'image/jpeg\', \'image/png\'];\n'
+  + '      allow update, delete: if ownsDraft();\n'
   + '    }\n'
   + '    match /{allPaths=**} {\n'
   + '      allow read, write: if request.auth != null && request.auth.token.email == \'chikondigahimbare@gmail.com\';\n'
@@ -300,8 +315,15 @@ function _fallbackCopy(text, label) {
   }
 }
 
-function copyFirestoreRules()  { _copyToClipboard(FIRESTORE_RULES_TEXT, 'Firestore Rules'); }
-function copyStorageRules()    { _copyToClipboard(STORAGE_RULES_TEXT,   'Storage Rules');   }
+function copyRuleFile(path, label) {
+  fetch(path, { cache: 'no-store' }).then(function (response) {
+    if (!response.ok) throw new Error('Could not load ' + path + '.');
+    return response.text();
+  }).then(function (rules) { _copyToClipboard(rules, label); })
+    .catch(function () { toast('Could not load the current rules file. Open ' + path + ' from the project and copy it manually.'); });
+}
+function copyFirestoreRules()  { copyRuleFile('/firestore.rules', 'Firestore Rules'); }
+function copyStorageRules()    { copyRuleFile('/storage.rules', 'Storage Rules'); }
 
 function _permHtml() {
   return ''
