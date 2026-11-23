@@ -238,12 +238,7 @@
     if (partner.details) addText(card, 'p', partner.details, 'partner-detail-description');
     var actions = document.createElement('div'); actions.className = 'record-actions';
     var invite = document.createElement('button'); invite.type = 'button'; invite.className = 'primary'; invite.textContent = 'Invite representative';
-    invite.addEventListener('click', function () {
-      $('rep-partner').value = partner.id;
-      $('rep-email').value = partner.email || '';
-      if (accessFlow) accessFlow.go(1);
-      window.location.hash = '#access';
-    });
+    invite.addEventListener('click', function () { openPartnerInvitation(partner); });
     var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'edit'; edit.textContent = 'Edit organisation';
     edit.addEventListener('click', function () { window.location.hash = '#partners'; window.setTimeout(function () { fillPartner(partner); }, 0); });
     var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'delete'; remove.textContent = 'Delete organisation';
@@ -254,6 +249,13 @@
         .catch(function (error) { notice(error.message); });
     });
     actions.append(invite, edit, remove); card.appendChild(actions); container.appendChild(card);
+  }
+
+  function openPartnerInvitation(partner) {
+    $('rep-partner').value = partner.id;
+    $('rep-email').value = partner.email || '';
+    if (accessFlow) accessFlow.go(1);
+    window.location.hash = '#access';
   }
 
   function renderPartners() {
@@ -278,7 +280,9 @@
       addText(info, 'span', partner.status, 'record-meta');
       var actions = document.createElement('div'); actions.className = 'record-actions';
       var open = document.createElement('a'); open.href = '#partner/' + encodeURIComponent(partner.id); open.className = 'edit button-link'; open.textContent = 'Open organisation';
-      actions.append(open); row.append(info, actions); list.appendChild(row);
+      var invite = document.createElement('button'); invite.type = 'button'; invite.className = 'primary'; invite.textContent = 'Invite representative';
+      invite.addEventListener('click', function () { openPartnerInvitation(partner); });
+      actions.append(invite, open); row.append(info, actions); list.appendChild(row);
     }, 'No partner organisations have been added.', 6);
     ['access-partner', 'rep-partner'].forEach(function (id) {
       var select = $(id); if (!select) return;
