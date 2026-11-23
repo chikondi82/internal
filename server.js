@@ -1869,7 +1869,14 @@ async function canReadVgfApplication(firestore, claims, application) {
 
 async function sendVgfEmail(to, subject, html, textBody) {
     const apiKey = process.env.RESEND_API_KEY;
-    const from = process.env.VGF_EMAIL_FROM;
+    const configuredFrom = process.env.VGF_EMAIL_FROM;
+    // Resend verifies sender domains independently. This workspace's verified
+    // sending domain is internal.vialifecoach.org; keep legacy root-domain
+    // sender settings working by moving only that address onto the verified domain.
+    const from = configuredFrom && configuredFrom.replace(
+        /([A-Z0-9._%+-]+)@vialifecoach\.org\b/i,
+        '$1@internal.vialifecoach.org'
+    );
     if (!apiKey || !from) return { sent: false, reason: 'email_not_configured' };
     let response;
     try { response = await fetch('https://api.resend.com/emails', {

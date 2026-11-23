@@ -57,9 +57,7 @@
     user.getIdTokenResult(true).then(function (token) {
       if (token.claims.vgfApplicant === true) { window.location.href = 'vgf-applicant.html'; return; }
       if (token.claims.vgfWorkspace === true || String(user.email || '').toLowerCase() === 'chikondigahimbare@gmail.com') {
-        $('partner-loading').hidden = true;
-        $('partner-auth').hidden = false;
-        notice('This browser is signed in to the VGF staff workspace. Sign out above, then use the partner representative’s invited email to continue.');
+        auth.signOut();
         return;
       }
       if (token.claims.vgfPartner !== true) {
