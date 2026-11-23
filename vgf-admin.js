@@ -8,6 +8,98 @@
   var emailTemplates = {};
   var $ = function (id) { return document.getElementById(id); };
 
+  var adminPages = {
+    overview: ['Overview', 'A clear view of programmes, applications and partner activity.'],
+    programmes: ['Programmes', 'Create opportunities, build application forms and manage published programmes.'],
+    applications: ['Applications', 'Review submissions, assign reviewers and manage application decisions.'],
+    partners: ['Partner organisations', 'Add and update the organisations that work with VGF.'],
+    access: ['Access & representatives', 'Set programme permissions and manage partner representative accounts.'],
+    reports: ['Reports', 'Review platform activity and application breakdowns.'],
+    settings: ['Privacy & email', 'Manage applicant privacy information, retention and email templates.'],
+    audit: ['Audit log', 'Review recent administrative activity.']
+  };
+
+  function initializeAdminPages() {
+    var main = document.querySelector('main');
+    var intro = main && main.querySelector('.intro');
+    if (!main || !intro || main.querySelector('.admin-layout')) return;
+    var noticeElement = $('notice');
+    var layout = document.createElement('div'); layout.className = 'admin-layout';
+    var sidebar = document.createElement('aside'); sidebar.className = 'admin-sidebar'; sidebar.setAttribute('aria-label', 'VGF administration pages');
+    sidebar.innerHTML = '<p class="sidebar-label">ADMINISTRATION</p><nav class="admin-nav">' +
+      '<a href="#overview" data-admin-link="overview"><span class="nav-icon">OV</span>Overview</a>' +
+      '<a href="#programmes" data-admin-link="programmes"><span class="nav-icon">PR</span>Programmes</a>' +
+      '<a href="#applications" data-admin-link="applications"><span class="nav-icon">AP</span>Applications</a>' +
+      '<a href="#partners" data-admin-link="partners"><span class="nav-icon">OR</span>Partner organisations</a>' +
+      '<a href="#access" data-admin-link="access"><span class="nav-icon">AC</span>Access &amp; representatives</a>' +
+      '<a href="#reports" data-admin-link="reports"><span class="nav-icon">RP</span>Reports</a>' +
+      '<a href="#settings" data-admin-link="settings"><span class="nav-icon">SE</span>Privacy &amp; email</a>' +
+      '<a href="#audit" data-admin-link="audit"><span class="nav-icon">AU</span>Audit log</a></nav><a class="sidebar-workspace" href="/dashboard">&lt;- Back to workspace</a>';
+    var content = document.createElement('div'); content.className = 'admin-pages';
+    Object.keys(adminPages).forEach(function (key) {
+      var page = document.createElement('section'); page.className = 'admin-page'; page.dataset.adminPage = key; page.hidden = true;
+      var heading = document.createElement('div'); heading.className = 'admin-page-heading';
+      var title = document.createElement('h2'); title.textContent = adminPages[key][0];
+      var description = document.createElement('p'); description.textContent = adminPages[key][1];
+      heading.append(title, description); page.appendChild(heading); content.appendChild(page);
+    });
+    layout.append(sidebar, content);
+
+    function place(element, pageKey) {
+      if (element) { element.classList.add('admin-page-panel'); content.querySelector('[data-admin-page="' + pageKey + '"]').appendChild(element); }
+    }
+    var programmeForm = $('programme-form');
+    var partnerForm = $('partner-form');
+    var programmeList = $('programme-list');
+    var applicationList = $('application-list');
+    var accessForm = $('access-form');
+    var overviewMetrics = $('overview-metrics');
+    var auditList = $('audit-list');
+    var settingsForm = $('settings-form');
+    var programmePanel = programmeForm && programmeForm.closest('section');
+    var partnerPanel = partnerForm && partnerForm.closest('section');
+    var programmeRecords = programmeList && programmeList.closest('section');
+    var applicationRecords = applicationList && applicationList.closest('section');
+    var accessPanel = accessForm && accessForm.closest('section');
+    var reportPanel = overviewMetrics && overviewMetrics.closest('section');
+    var auditPanel = auditList && auditList.closest('section');
+    var settingsPanel = settingsForm && settingsForm.closest('section');
+    [programmePanel, partnerPanel].forEach(function (panel) { if (panel && panel.parentElement.classList.contains('columns')) panel.parentElement.removeChild(panel); });
+    if (programmePanel && programmePanel.parentElement && programmePanel.parentElement.classList.contains('columns')) programmePanel.parentElement.remove();
+    place(programmePanel, 'programmes'); place(programmeRecords, 'programmes');
+    place(partnerPanel, 'partners'); place(applicationRecords, 'applications'); place(accessPanel, 'access');
+    place(reportPanel, 'reports'); place(settingsPanel, 'settings'); place(auditPanel, 'audit');
+
+    var overview = content.querySelector('[data-admin-page="overview"]');
+    var welcome = document.createElement('section'); welcome.className = 'panel overview-welcome';
+    welcome.innerHTML = '<p class="eyebrow">YOUR VGF WORKSPACE</p><h2>What would you like to work on?</h2><p>Choose a section from the sidebar to manage programmes, review applications, support partners or update platform settings.</p>';
+    var shortcuts = document.createElement('div'); shortcuts.className = 'quick-links';
+    [['programmes','Programmes','Create and publish funding opportunities.'],['applications','Applications','Review submissions and record decisions.'],['partners','Partner organisations','Maintain your delivery partner directory.'],['reports','Reports','See platform totals and application trends.']].forEach(function (item) {
+      var link = document.createElement('a'); link.href = '#' + item[0]; var strong = document.createElement('strong'); strong.textContent = item[1]; var text = document.createElement('span'); text.textContent = item[2] + ' >'; link.append(strong, text); shortcuts.appendChild(link);
+    });
+    var overviewSummary = document.createElement('div'); overviewSummary.id = 'overview-summary'; overviewSummary.className = 'metrics-grid';
+    overview.append(welcome, overviewSummary, shortcuts);
+    var introTitle = intro.querySelector('h1');
+    intro.classList.add('admin-heading');
+    main.insertBefore(layout, noticeElement ? noticeElement.nextSibling : intro.nextSibling);
+
+    function showPage() {
+      var key = window.location.hash.slice(1);
+      if (!adminPages[key]) key = 'overview';
+      content.querySelectorAll('[data-admin-page]').forEach(function (page) { page.hidden = page.dataset.adminPage !== key; });
+      sidebar.querySelectorAll('[data-admin-link]').forEach(function (link) {
+        if (link.dataset.adminLink === key) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+      });
+      introTitle.textContent = adminPages[key][0];
+      var subtitle = intro.querySelector('p:not(.eyebrow)'); if (subtitle) subtitle.textContent = adminPages[key][1];
+      document.title = adminPages[key][0] + ' | Vialifecoach Global Foundation';
+      window.scrollTo(0, 0);
+    }
+    window.addEventListener('hashchange', showPage);
+    showPage();
+  }
+  initializeAdminPages();
+
   function notice(message, type) {
     var el = $('notice');
     el.textContent = message;
@@ -362,6 +454,7 @@
     request('/admin/overview').then(function (data) {
       var metrics = $('overview-metrics'); metrics.replaceChildren();
       [['Programmes',data.totalProgrammes],['Applications',data.totalApplications],['Partners',data.totalPartners],['Awaiting review',data.awaitingReview]].forEach(function (item) { var card = document.createElement('article'); card.className = 'metric-card'; var value = document.createElement('strong'); value.textContent = String(item[1] || 0); var label = document.createElement('span'); label.textContent = item[0]; card.append(value, label); metrics.appendChild(card); });
+      var summary = $('overview-summary'); if (summary) { summary.replaceChildren(); metrics.querySelectorAll('.metric-card').forEach(function (card) { summary.appendChild(card.cloneNode(true)); }); }
       var breakdown = $('overview-breakdown'); breakdown.replaceChildren();
       [['By programme',data.byProgramme],['By status',data.byStatus],['By country',data.byCountry],['By beneficiary category',data.byBeneficiaryCategory]].forEach(function (group) { var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div'); var title = document.createElement('strong'); title.textContent = group[0]; var text = document.createElement('p'); text.textContent = Object.entries(group[1] || {}).map(function (entry) { return entry[0] + ': ' + entry[1]; }).join(' · ') || 'No data yet'; info.append(title, text); row.appendChild(info); breakdown.appendChild(row); });
     }).catch(function (error) { notice(error.message); });
