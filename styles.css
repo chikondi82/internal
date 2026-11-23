@@ -351,6 +351,28 @@ h1 {
   transform: translateY(-1px);
 }
 
+.partner-portal-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px 15px;
+  border: 1px solid rgba(201, 168, 76, .38);
+  border-radius: 9px;
+  background: rgba(22, 29, 37, .72);
+  color: var(--brand-gold-light);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background .15s, border-color .15s;
+}
+
+.partner-portal-link:hover {
+  background: rgba(22, 29, 37, .96);
+  border-color: var(--brand-gold-light);
+}
+
 .btn:active:not([disabled]) {
   transform: translateY(0);
 }
