@@ -8,6 +8,7 @@
   var emailTemplates = {};
   var $ = function (id) { return document.getElementById(id); };
   var programmeFlow = null;
+  var accessFlow = null;
 
   function createSteppedFlow(container, groups, titles) {
     var flow = document.createElement('div'); flow.className = 'admin-step-flow';
@@ -54,6 +55,7 @@
   var adminPages = {
     overview: ['Overview', 'A clear view of programmes, applications and partner activity.'],
     programmes: ['Programmes', 'Create opportunities, build application forms and manage published programmes.'],
+    'programme-create': ['Create a programme', 'Set up an opportunity in three short steps.'],
     applications: ['Applications', 'Review submissions, assign reviewers and manage application decisions.'],
     partners: ['Partner organisations', 'Add and update the organisations that work with VGF.'],
     access: ['Access & representatives', 'Set programme permissions and manage partner representative accounts.'],
@@ -86,6 +88,8 @@
       var description = document.createElement('p'); description.textContent = adminPages[key][1];
       heading.append(title, description); page.appendChild(heading); content.appendChild(page);
     });
+    var partnerDetail = document.createElement('section'); partnerDetail.className = 'panel admin-page-panel partner-detail-page'; partnerDetail.dataset.adminPage = 'partner-detail'; partnerDetail.hidden = true;
+    content.appendChild(partnerDetail);
     layout.append(sidebar, content);
 
     function place(element, pageKey) {
@@ -109,7 +113,11 @@
     var settingsPanel = settingsForm && settingsForm.closest('section');
     [programmePanel, partnerPanel].forEach(function (panel) { if (panel && panel.parentElement.classList.contains('columns')) panel.parentElement.removeChild(panel); });
     if (programmePanel && programmePanel.parentElement && programmePanel.parentElement.classList.contains('columns')) programmePanel.parentElement.remove();
-    place(programmePanel, 'programmes'); place(programmeRecords, 'programmes');
+    place(programmePanel, 'programme-create'); place(programmeRecords, 'programmes');
+    if (programmeRecords) {
+      var createButton = document.createElement('a'); createButton.className = 'primary button-link'; createButton.href = '#programme-create'; createButton.textContent = 'Create programme';
+      programmeRecords.querySelector('.panel-title').appendChild(createButton);
+    }
     place(partnerPanel, 'partners'); place(applicationRecords, 'applications'); place(accessPanel, 'access');
     place(reportPanel, 'reports'); place(settingsPanel, 'settings'); place(auditPanel, 'audit');
 
@@ -117,7 +125,7 @@
     if (programmeForm && programmeChildren.length >= 14) programmeFlow = createSteppedFlow(programmeForm, [programmeChildren.slice(0, 6), programmeChildren.slice(6, 12), programmeChildren.slice(12)], ['Programme details', 'Application form', 'Partners & publishing']);
     if (accessPanel) {
       var accessList = accessPanel.querySelector('#access-list'); var repForm = accessPanel.querySelector('#representative-form'); var repList = accessPanel.querySelector('#representative-list');
-      createSteppedFlow(accessPanel, [[accessForm, accessList], [repForm, repList]], ['Programme permissions', 'Representatives']);
+      accessFlow = createSteppedFlow(accessPanel, [[accessForm, accessList], [repForm, repList]], ['Programme permissions', 'Representatives']);
     }
     if (settingsForm) {
       var migration = settingsPanel.querySelector('.migration-box'); if (migration) settingsForm.appendChild(migration);
@@ -139,15 +147,19 @@
     main.insertBefore(layout, noticeElement ? noticeElement.nextSibling : intro.nextSibling);
 
     function showPage() {
-      var key = window.location.hash.slice(1);
-      if (!adminPages[key]) key = 'overview';
+      var route = window.location.hash.slice(1);
+      var partnerId = route.indexOf('partner/') === 0 ? decodeURIComponent(route.slice(8)) : '';
+      var key = partnerId ? 'partner-detail' : route;
+      if (!adminPages[key] && key !== 'partner-detail') key = 'overview';
+      if (partnerId) renderPartnerDetail(partnerId, partnerDetail);
       content.querySelectorAll('[data-admin-page]').forEach(function (page) { page.hidden = page.dataset.adminPage !== key; });
       sidebar.querySelectorAll('[data-admin-link]').forEach(function (link) {
-        if (link.dataset.adminLink === key) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+        if (link.dataset.adminLink === (key === 'partner-detail' ? 'partners' : key === 'programme-create' ? 'programmes' : key)) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
       });
-      introTitle.textContent = adminPages[key][0];
-      var subtitle = intro.querySelector('p:not(.eyebrow)'); if (subtitle) subtitle.textContent = adminPages[key][1];
-      document.title = adminPages[key][0] + ' | Vialifecoach Global Foundation';
+      var pageTitle = key === 'partner-detail' ? (partners.find(function (item) { return item.id === partnerId; }) || {}).name || 'Partner organisation' : adminPages[key][0];
+      introTitle.textContent = pageTitle;
+      var subtitle = intro.querySelector('p:not(.eyebrow)'); if (subtitle) subtitle.textContent = key === 'partner-detail' ? 'Organisation details and access controls.' : adminPages[key][1];
+      document.title = pageTitle + ' | Vialifecoach Global Foundation';
       window.scrollTo(0, 0);
     }
     window.addEventListener('hashchange', showPage);
@@ -214,6 +226,36 @@
     pager.append(previous, label, next); list.insertAdjacentElement('afterend', pager); list._pager = pager;
   }
 
+  function renderPartnerDetail(partnerId, container) {
+    var partner = partners.find(function (item) { return item.id === partnerId; });
+    container.replaceChildren();
+    if (!partner) { addText(container, 'p', 'This organisation could not be found.', 'muted'); return; }
+    var back = document.createElement('a'); back.href = '#partners'; back.className = 'back-link'; back.textContent = '← Partner organisations'; container.appendChild(back);
+    var card = document.createElement('article'); card.className = 'partner-detail-card';
+    addText(card, 'h2', partner.name);
+    addText(card, 'p', partner.email || 'No contact email provided.');
+    addText(card, 'span', partner.status, 'status-chip');
+    if (partner.details) addText(card, 'p', partner.details, 'partner-detail-description');
+    var actions = document.createElement('div'); actions.className = 'record-actions';
+    var invite = document.createElement('button'); invite.type = 'button'; invite.className = 'primary'; invite.textContent = 'Invite representative';
+    invite.addEventListener('click', function () {
+      $('rep-partner').value = partner.id;
+      $('rep-email').value = partner.email || '';
+      if (accessFlow) accessFlow.go(1);
+      window.location.hash = '#access';
+    });
+    var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'edit'; edit.textContent = 'Edit organisation';
+    edit.addEventListener('click', function () { window.location.hash = '#partners'; window.setTimeout(function () { fillPartner(partner); }, 0); });
+    var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'delete'; remove.textContent = 'Delete organisation';
+    remove.addEventListener('click', function () {
+      if (!window.confirm('Delete "' + partner.name + '"? This revokes its programme access and disables its representatives. Applications and uploaded documents will be retained.')) return;
+      request('/partners/' + encodeURIComponent(partner.id) + '/delete', {}, 'POST')
+        .then(function () { notice('Partner organisation deleted and access revoked.', 'success'); window.location.hash = '#partners'; return load(); })
+        .catch(function (error) { notice(error.message); });
+    });
+    actions.append(invite, edit, remove); card.appendChild(actions); container.appendChild(card);
+  }
+
   function renderPartners() {
     var checks = $('partner-checklist');
     var list = $('partner-list');
@@ -232,19 +274,11 @@
       var row = document.createElement('article'); row.className = 'record';
       var info = document.createElement('div');
       addText(info, 'strong', partner.name);
-      addText(info, 'p', partner.email || partner.details || 'No contact details provided.');
+      addText(info, 'p', partner.email || 'No contact email provided.');
       addText(info, 'span', partner.status, 'record-meta');
       var actions = document.createElement('div'); actions.className = 'record-actions';
-      var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'edit'; edit.textContent = 'Edit';
-      edit.addEventListener('click', function () { fillPartner(partner); });
-      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'delete'; remove.textContent = 'Delete organisation';
-      remove.addEventListener('click', function () {
-        if (!window.confirm('Delete "' + partner.name + '"? This revokes its programme access and disables its representatives. Applications and uploaded documents will be retained.')) return;
-        request('/partners/' + encodeURIComponent(partner.id) + '/delete', {}, 'POST')
-          .then(function () { notice('Partner organisation deleted and access revoked.', 'success'); return load(); })
-          .catch(function (error) { notice(error.message); });
-      });
-      actions.append(edit, remove); row.append(info, actions); list.appendChild(row);
+      var open = document.createElement('a'); open.href = '#partner/' + encodeURIComponent(partner.id); open.className = 'edit button-link'; open.textContent = 'Open organisation';
+      actions.append(open); row.append(info, actions); list.appendChild(row);
     }, 'No partner organisations have been added.', 6);
     ['access-partner', 'rep-partner'].forEach(function (id) {
       var select = $(id); if (!select) return;
@@ -513,7 +547,15 @@
   $('access-programme').addEventListener('change', renderAccess); $('access-partner').addEventListener('change', renderAccess);
   $('access-form').addEventListener('submit', function (event) { event.preventDefault(); var perms = Array.from(document.querySelectorAll('[name="access-permission"]:checked')).map(function (box) { return box.value; }); request('/admin/partners/' + encodeURIComponent($('access-partner').value) + '/access', { programmeId: $('access-programme').value, permissions: perms, enabled: true }, 'POST').then(function () { notice('Partner permissions saved.', 'success'); return load(); }).catch(function (error) { notice(error.message); }); });
   $('revoke-access').addEventListener('click', function () { request('/admin/partners/' + encodeURIComponent($('access-partner').value) + '/access', { programmeId: $('access-programme').value, permissions: [], enabled: false }, 'POST').then(function () { notice('Programme access revoked.', 'success'); return load(); }).catch(function (error) { notice(error.message); }); });
-  $('representative-form').addEventListener('submit', function (event) { event.preventDefault(); request('/partners/' + encodeURIComponent($('rep-partner').value) + '/representatives', { name: $('rep-name').value, email: $('rep-email').value, role: $('rep-role').value }, 'POST').then(function () { $('representative-form').reset(); notice('Invitation email sent.', 'success'); return load(); }).catch(function (error) { notice(error.message); }); });
+  $('representative-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var form = $('representative-form'); var button = form.querySelector('[type="submit"]'); var status = $('invitation-status');
+    button.disabled = true; button.textContent = 'Sending invitation…'; status.textContent = 'Creating the partner account and sending its setup email…';
+    request('/partners/' + encodeURIComponent($('rep-partner').value) + '/representatives', { name: $('rep-name').value, email: $('rep-email').value, role: $('rep-role').value }, 'POST')
+      .then(function () { form.reset(); status.textContent = 'Invitation email sent. The representative must verify their email and set a password before signing in.'; notice('Partner invitation sent.', 'success'); return load(); })
+      .catch(function (error) { status.textContent = 'Invitation was not sent: ' + error.message; notice(error.message); })
+      .finally(function () { button.disabled = false; button.textContent = 'Send invitation'; });
+  });
   $('load-applications').addEventListener('click', loadApplications);
   $('export-applications').addEventListener('click', function () { if (!applications.length) return notice('Load applications before exporting.'); var fields = ['reference','programmeName','applicantName','applicantEmail','status']; var rows = [fields.join(',')].concat(applications.map(function (item) { return fields.map(function (field) { return '"' + String(item[field] || '').replace(/"/g, '""') + '"'; }).join(','); })); var link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([rows.join('\r\n')], { type: 'text/csv;charset=utf-8' })); link.download = 'vgf-applications.csv'; link.click(); URL.revokeObjectURL(link.href); });
 

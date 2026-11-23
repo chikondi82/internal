@@ -1,0 +1,9 @@
+.button-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer}
+.partner-detail-page{padding:24px}
+.partner-detail-card{display:grid;gap:10px;max-width:760px;padding:22px;border:1px solid #27313b;border-radius:14px;background:#11171e}
+.partner-detail-card h2{margin:0;color:#f3f6fa;font-size:22px}
+.partner-detail-card p{margin:0;color:#8996a5}
+.partner-detail-card .partner-detail-description{margin-top:8px;line-height:1.6;white-space:pre-wrap}
+.partner-detail-card .record-actions{margin-top:12px;flex-wrap:wrap}
+.back-link{display:inline-block;margin-bottom:18px;color:#25a96b;font-weight:700;text-decoration:none}
+.admin-page[data-admin-page="programme-create"] .admin-page-panel{max-width:900px}

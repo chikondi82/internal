@@ -1881,8 +1881,9 @@ async function sendVgfEmail(to, subject, html, textBody) {
         return { sent: false, reason: 'email_provider_error' };
     }
     if (!response.ok) {
-        console.error('VGF notification email was rejected:', response.status);
-        return { sent: false, reason: 'email_provider_error' };
+        const providerMessage = (await response.text().catch(() => '')).slice(0, 500);
+        console.error('VGF notification email was rejected:', response.status, providerMessage);
+        return { sent: false, reason: 'email_provider_error', status: response.status, detail: providerMessage };
     }
     return { sent: true };
 }
@@ -2612,14 +2613,18 @@ app.post('/api/vgf/partners/:id/representatives', async (req, res) => {
         await adminAuth.setCustomUserClaims(createdUser.uid, { vgfPartner: true });
         await firestore.collection('users').doc(createdUser.uid).set({ uid: createdUser.uid, name, email, createdAt: FieldValue.serverTimestamp(), accountType: 'partner' }, { merge: true });
         await firestore.collection('vgfMemberships').doc(createdUser.uid).set({ uid: createdUser.uid, partnerId: req.params.id, role, enabled: true, invitedBy: claims.sub, createdAt: FieldValue.serverTimestamp() });
-        const baseUrl = process.env.VGF_APP_ORIGIN || 'https://vialifecoach.netlify.app';
+        const baseUrl = process.env.VGF_APP_ORIGIN || 'https://internal.vialifecoach.org';
         const resetLink = await adminAuth.generatePasswordResetLink(email, { url: baseUrl + '/vgf-partner.html' });
-        const sent = await sendVgfEmail(email, 'Your VGF partner portal access', `<p>Hello ${escHtml(name)},</p><p>You have been invited to the VGF partner portal for ${escHtml(partner.data().name)}.</p><p><a href="${escHtml(resetLink)}">Set your password and sign in</a></p>`, `You have been invited to the VGF partner portal. Set your password: ${resetLink}`);
+        const verifyLink = await adminAuth.generateEmailVerificationLink(email, { url: baseUrl + '/vgf-partner.html' });
+        const sent = await sendVgfEmail(email, 'Your VGF partner portal invitation', `<p>Hello ${escHtml(name)},</p><p>${escHtml(partner.data().name)} has invited you to the VGF partner portal.</p><ol><li><a href="${escHtml(verifyLink)}">Verify your email address</a></li><li><a href="${escHtml(resetLink)}">Set your password</a></li><li><a href="${escHtml(baseUrl + '/vgf-partner.html')}">Sign in to the partner portal</a></li></ol>`, `You have been invited to the VGF partner portal for ${partner.data().name}. Verify your email: ${verifyLink}\n\nSet your password: ${resetLink}\n\nSign in: ${baseUrl}/vgf-partner.html`);
         if (!sent.sent) {
             await firestore.collection('vgfMemberships').doc(createdUser.uid).delete();
             await firestore.collection('users').doc(createdUser.uid).delete();
             await adminAuth.deleteUser(createdUser.uid);
-            return res.status(503).json({ error: 'Partner invitation email is not configured or could not be sent. Configure RESEND_API_KEY and VGF_EMAIL_FROM, then retry.' });
+            const message = sent.reason === 'email_not_configured'
+                ? 'Partner invitation email is not configured. The server needs RESEND_API_KEY and VGF_EMAIL_FROM.'
+                : 'The email provider rejected the invitation (HTTP ' + (sent.status || 'network error') + '). Check the verified sender and Resend account, then retry.' + (sent.detail ? ' Provider response: ' + sent.detail : '');
+            return res.status(503).json({ error: message });
         }
         await writeVgfAudit(firestore, claims, 'partner.representative_invited', 'partner_member', createdUser.uid);
         return res.status(201).json({ uid: createdUser.uid, email, name, role, enabled: true });
@@ -2722,9 +2727,10 @@ app.post('/api/vgf/partner/representatives', async (req, res) => {
         await adminAuth.setCustomUserClaims(createdUser.uid, { vgfPartner: true });
         await firestore.collection('users').doc(createdUser.uid).set({ uid: createdUser.uid, name, email, accountType: 'partner', createdAt: FieldValue.serverTimestamp() }, { merge: true });
         await firestore.collection('vgfMemberships').doc(createdUser.uid).set({ uid: createdUser.uid, partnerId: manager.partnerId, role, enabled: true, invitedBy: context.claims.sub, createdAt: FieldValue.serverTimestamp() });
-        const baseUrl = process.env.VGF_APP_ORIGIN || 'https://vialifecoach.netlify.app';
+        const baseUrl = process.env.VGF_APP_ORIGIN || 'https://internal.vialifecoach.org';
         const resetLink = await adminAuth.generatePasswordResetLink(email, { url: baseUrl + '/vgf-partner.html' });
-        const sent = await sendVgfEmail(email, 'Your VGF partner portal access', `<p>Hello ${escHtml(name)},</p><p>${escHtml(manager.partner.name)} invited you to its VGF partner portal.</p><p><a href="${escHtml(resetLink)}">Set your password and sign in</a></p>`, `You have been invited to the VGF partner portal. Set your password: ${resetLink}`);
+        const verifyLink = await adminAuth.generateEmailVerificationLink(email, { url: baseUrl + '/vgf-partner.html' });
+        const sent = await sendVgfEmail(email, 'Your VGF partner portal invitation', `<p>Hello ${escHtml(name)},</p><p>${escHtml(manager.partner.name)} invited you to its VGF partner portal.</p><ol><li><a href="${escHtml(verifyLink)}">Verify your email address</a></li><li><a href="${escHtml(resetLink)}">Set your password</a></li><li><a href="${escHtml(baseUrl + '/vgf-partner.html')}">Sign in to the partner portal</a></li></ol>`, `You have been invited to the VGF partner portal. Verify your email: ${verifyLink}\n\nSet your password: ${resetLink}\n\nSign in: ${baseUrl}/vgf-partner.html`);
         if (!sent.sent) throw Object.assign(new Error('Partner invitation email is not configured.'), { code: 'vgf/email-not-configured' });
         await writeVgfAudit(firestore, context.claims, 'partner.representative_invited', 'partner_member', createdUser.uid);
         return res.status(201).json({ uid: createdUser.uid, email, name, role, enabled: true });
