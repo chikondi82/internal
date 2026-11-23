@@ -47,16 +47,50 @@
     if (!(data.representatives || []).length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No representatives yet.'; list.appendChild(empty); }
   }).catch(function (error) { notice(error.message); }); }
   function signedIn(nextUser) {
-    user = nextUser; $('partner-auth').hidden = !!user; $('partner-dashboard').hidden = !user; $('partner-signout').hidden = !user;
-    if (user) {
-      user.getIdTokenResult(true).then(function (token) {
-        if (token.claims.vgfApplicant === true) { window.location.href = 'vgf-applicant.html'; return; }
-        if (token.claims.vgfWorkspace === true || String(user.email || '').toLowerCase() === 'chikondigahimbare@gmail.com') { window.location.href = '/dashboard'; return; }
-        if (token.claims.vgfPartner !== true) { auth.signOut().then(function () { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice('This account is not registered as a VGF partner representative.'); }); return; }
-      }).catch(function () { auth.signOut(); });
-      if (!user.emailVerified) { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice('Verify your email address before using partner access.'); return; }
-      api('/partner/context').then(function (context) { $('partner-org-name').textContent = context.organisation || ''; $('partner-rep-management').hidden = !context.canManageRepresentatives; if (context.canManageRepresentatives) loadRepresentatives(); load(); }).catch(function (error) { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice(error.message); });
-    }
+    user = nextUser;
+    $('partner-auth').hidden = !!user;
+    $('partner-loading').hidden = !user;
+    $('partner-dashboard').hidden = true;
+    $('partner-rep-management').hidden = true;
+    $('partner-signout').hidden = !user;
+    if (!user) return;
+    user.getIdTokenResult(true).then(function (token) {
+      if (token.claims.vgfApplicant === true) { window.location.href = 'vgf-applicant.html'; return; }
+      if (token.claims.vgfWorkspace === true || String(user.email || '').toLowerCase() === 'chikondigahimbare@gmail.com') {
+        $('partner-loading').hidden = true;
+        $('partner-auth').hidden = false;
+        notice('This browser is signed in to the VGF staff workspace. Sign out above, then use the partner representative’s invited email to continue.');
+        return;
+      }
+      if (token.claims.vgfPartner !== true) {
+        auth.signOut().then(function () {
+          $('partner-loading').hidden = true;
+          $('partner-auth').hidden = false;
+          $('partner-signout').hidden = true;
+          notice('This account is not registered as a VGF partner representative. Use the email address that received the invitation.');
+        });
+        return;
+      }
+      if (!user.emailVerified) {
+        $('partner-loading').hidden = true;
+        $('partner-auth').hidden = false;
+        notice('Verify the invited email address before using partner access.');
+        return;
+      }
+      return api('/partner/context').then(function (context) {
+        $('partner-loading').hidden = true;
+        $('partner-dashboard').hidden = false;
+        $('partner-org-name').textContent = context.organisation || '';
+        $('partner-rep-management').hidden = !context.canManageRepresentatives;
+        if (context.canManageRepresentatives) loadRepresentatives();
+        return load();
+      });
+    }).catch(function (error) {
+      $('partner-loading').hidden = true;
+      $('partner-auth').hidden = false;
+      $('partner-dashboard').hidden = true;
+      notice(error.message || 'Could not verify partner access. Sign in with the invited representative email.');
+    });
   }
   $('partner-login').addEventListener('submit', function (event) { event.preventDefault(); auth.signInWithEmailAndPassword($('partner-email').value.trim(), $('partner-password').value).then(function (credential) { signedIn(credential.user); }).catch(function (error) { notice(error.message); }); });
   $('partner-reset-password').addEventListener('click', function () {
