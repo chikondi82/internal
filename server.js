@@ -2416,9 +2416,13 @@ app.get('/api/vgf/partner/applications', async (req, res) => {
         if (!partner.exists || partner.data().status !== 'active') return res.status(403).json({ error: 'Your partner organisation is inactive.' });
         const programmeSnapshot = await context.firestore.collection('vgfProgrammes').where('partnerIds', 'array-contains', partnerId).get();
         const visibleProgrammeIds = [];
+        const visibleProgrammes = [];
         for (const programmeDoc of programmeSnapshot.docs) {
             const grant = await context.firestore.collection('vgfProgrammeAccess').doc(programmeDoc.id + '_' + partnerId).get();
-            if (grant.exists && grant.data().enabled === true && (grant.data().permissions || []).includes('view_applications')) visibleProgrammeIds.push(programmeDoc.id);
+            if (grant.exists && grant.data().enabled === true && (grant.data().permissions || []).includes('view_applications')) {
+                visibleProgrammeIds.push(programmeDoc.id);
+                visibleProgrammes.push({ id: programmeDoc.id, name: programmeDoc.data().name || 'Programme', status: programmeDoc.data().status || '', coverage: programmeDoc.data().coverage || '' });
+            }
         }
         const apps = [];
         for (const programmeId of visibleProgrammeIds.slice(0, 30)) {
@@ -2429,7 +2433,7 @@ app.get('/api/vgf/partner/applications', async (req, res) => {
                 apps.push({ id: doc.id, reference: item.reference || '', programmeId, programmeName: item.programmeName, applicantName: item.applicantName, status: item.status, createdAt: item.createdAt && item.createdAt.toDate ? item.createdAt.toDate().toISOString() : '', permissions: grant.data().permissions || [] });
             });
         }
-        return res.json({ applications: apps.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))) });
+        return res.json({ programmes: visibleProgrammes, applications: apps.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))) });
     } catch (error) {
         console.error('VGF partner application list failed:', error);
         return res.status(503).json({ error: 'Could not load your assigned applications.' });

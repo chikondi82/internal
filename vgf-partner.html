@@ -3,6 +3,31 @@
 <body><header class="topbar"><a class="brand" href="programmes.html"><img src="https://i.postimg.cc/TwZgn6YW/Vialifecoach-Global-Foundation-logo.jpg" alt=""/><span>Vialifecoach<small>Partner Portal</small></span></a><nav><a href="programmes.html">Public opportunities</a><button id="partner-signout" type="button" hidden>Sign out</button></nav></header><main><div id="partner-notice" class="notice" hidden role="status"></div>
 <section id="partner-auth" class="panel portal-panel"><p class="eyebrow">APPROVED PARTNERS</p><h1>Partner sign in</h1><p class="muted">Access is limited to programmes assigned by VGF. Use the email address that received your VGF invitation. Open the invitation to set your password, then sign in here.</p><form id="partner-login"><label>Email<input id="partner-email" type="email" required autocomplete="email"/></label><label>Password<input id="partner-password" type="password" required autocomplete="current-password"/></label><button class="primary" type="submit">Sign in</button><button id="partner-reset-password" class="secondary" type="button">Forgot password?</button></form></section>
 <section id="partner-loading" class="panel portal-panel" hidden><p class="eyebrow">PARTNER PORTAL</p><p class="muted">Checking your account access…</p></section>
-<section id="partner-dashboard" class="panel portal-panel" hidden><div class="panel-title"><div><p class="eyebrow">ASSIGNED RECORDS ONLY · <span id="partner-org-name"></span></p><h1>Programme applications</h1></div><button id="partner-refresh" type="button" class="secondary">Refresh</button></div><div id="partner-applications"></div></section>
-<section id="partner-rep-management" class="panel portal-panel" hidden><div class="panel-title"><div><p class="eyebrow">ORGANISATION ACCESS</p><h2>Representatives</h2></div><button id="partner-rep-refresh" type="button" class="secondary">Refresh</button></div><form id="partner-rep-form" class="partner-form"><label>Name<input id="partner-rep-name" maxlength="160" required /></label><label>Email<input id="partner-rep-email" type="email" maxlength="254" required /></label><label>Role<select id="partner-rep-role"><option value="partner_reviewer">Partner Reviewer</option><option value="partner_viewer">Partner Viewer</option></select></label><button class="primary" type="submit">Invite representative</button></form><div id="partner-representatives" class="record-list"></div></section>
+<section id="partner-dashboard" class="partner-shell" hidden>
+  <aside class="partner-sidebar" aria-label="Partner dashboard navigation">
+    <p class="eyebrow">PARTNER WORKSPACE</p>
+    <strong id="partner-sidebar-org" class="partner-sidebar-org"></strong>
+    <button class="partner-nav active" type="button" data-partner-view="overview">Overview</button>
+    <button class="partner-nav" type="button" data-partner-view="applications">Applications</button>
+    <button id="partner-team-nav" class="partner-nav" type="button" data-partner-view="team" hidden>Organisation access</button>
+    <a class="partner-sidebar-link" href="programmes.html">Public opportunities</a>
+  </aside>
+  <div class="partner-content">
+    <section id="partner-view-overview" class="panel portal-panel">
+      <div class="partner-page-heading"><div><p class="eyebrow">ASSIGNED RECORDS ONLY</p><h1>Welcome, <span id="partner-org-name"></span></h1><p class="muted">Review your assigned programmes and the applications shared with your organisation.</p></div><button id="partner-refresh" type="button" class="secondary">Refresh</button></div>
+      <div class="partner-stats"><article><span>Assigned programmes</span><strong id="partner-stat-programmes">0</strong></article><article><span>Applications</span><strong id="partner-stat-applications">0</strong></article><article><span>Awaiting review</span><strong id="partner-stat-review">0</strong></article></div>
+      <h2 class="partner-section-title">Your programmes</h2><div id="partner-programmes" class="partner-programme-list"></div>
+      <button class="primary" type="button" data-partner-view="applications">Open applications</button>
+    </section>
+    <section id="partner-view-applications" class="panel portal-panel" hidden>
+      <div class="partner-page-heading"><div><p class="eyebrow">ASSIGNED RECORDS ONLY</p><h1>Programme applications</h1><p class="muted">Applications for programmes VGF has assigned to your organisation.</p></div><button id="partner-app-refresh" type="button" class="secondary">Refresh</button></div>
+      <div id="partner-applications"></div>
+    </section>
+    <section id="partner-view-team" class="panel portal-panel" hidden>
+      <div class="panel-title"><div><p class="eyebrow">ORGANISATION ACCESS</p><h1>Representatives</h1><p class="muted">Manage colleagues who can access your organisation’s assigned records.</p></div><button id="partner-rep-refresh" type="button" class="secondary">Refresh</button></div>
+      <form id="partner-rep-form" class="partner-form"><label>Name<input id="partner-rep-name" maxlength="160" required /></label><label>Email<input id="partner-rep-email" type="email" maxlength="254" required /></label><label>Role<select id="partner-rep-role"><option value="partner_reviewer">Partner Reviewer</option><option value="partner_viewer">Partner Viewer</option></select></label><button class="primary" type="submit">Invite representative</button></form>
+      <div id="partner-representatives" class="record-list"></div>
+    </section>
+  </div>
+</section>
 </main><script src="firebase-init.js"></script><script src="vgf-partner.js"></script></body></html>

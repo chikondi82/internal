@@ -1,5 +1,6 @@
 (function () {
   var user = null;
+  var assignedProgrammes = [];
   var $ = function (id) { return document.getElementById(id); };
   function notice(message, type) { var el = $('partner-notice'); el.textContent = message; el.className = 'notice ' + (type || 'error'); el.hidden = false; }
   function api(path, body, method) {
@@ -14,7 +15,7 @@
   function render(items) {
     var parent = $('partner-applications'); parent.replaceChildren();
     var list = document.createElement('div'); list.className = 'record-list'; parent.appendChild(list);
-    if (!items.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No applications are available to your organisation.'; list.appendChild(empty); return; }
+    if (!items.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = assignedProgrammes.length ? 'There are no applications to review yet. New submissions for your assigned programmes will appear here.' : 'No programmes have been assigned to your organisation yet. Contact VGF if you expected to see programme access.'; list.appendChild(empty); return; }
     items.forEach(function (item) {
       var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div');
       var title = document.createElement('strong'); title.textContent = item.applicantName + ' · ' + (item.reference || 'Application');
@@ -40,7 +41,26 @@
       row.appendChild(detail);
     }).catch(function (error) { notice(error.message); });
   }
-  function load() { return api('/partner/applications').then(function (data) { render(data.applications || []); }).catch(function (error) { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice(error.message); }); }
+  function renderOverview(data) {
+    var applications = data.applications || [];
+    assignedProgrammes = data.programmes || [];
+    $('partner-stat-programmes').textContent = assignedProgrammes.length;
+    $('partner-stat-applications').textContent = applications.length;
+    $('partner-stat-review').textContent = applications.filter(function (item) { return item.status === 'submitted' || item.status === 'under_review'; }).length;
+    var list = $('partner-programmes'); list.replaceChildren();
+    if (!assignedProgrammes.length) { var empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No programmes have been assigned yet. VGF will add programmes here when your organisation is granted access.'; list.appendChild(empty); return; }
+    assignedProgrammes.forEach(function (programme) {
+      var row = document.createElement('article'); row.className = 'partner-programme';
+      var name = document.createElement('strong'); name.textContent = programme.name;
+      var detail = document.createElement('span'); detail.textContent = [programme.coverage, programme.status && String(programme.status).replace(/_/g, ' ')].filter(Boolean).join(' · ');
+      row.append(name, detail); list.appendChild(row);
+    });
+  }
+  function load() { return api('/partner/applications').then(function (data) { renderOverview(data); render(data.applications || []); }).catch(function (error) { $('partner-dashboard').hidden = true; $('partner-auth').hidden = false; notice(error.message); }); }
+  function showPartnerView(name) {
+    ['overview', 'applications', 'team'].forEach(function (view) { var panel = $('partner-view-' + view); if (panel) panel.hidden = view !== name; });
+    document.querySelectorAll('[data-partner-view]').forEach(function (button) { button.classList.toggle('active', button.getAttribute('data-partner-view') === name); });
+  }
   function loadRepresentatives() { return api('/partner/representatives').then(function (data) {
     var list = $('partner-representatives'); list.replaceChildren();
     (data.representatives || []).forEach(function (person) { var row = document.createElement('article'); row.className = 'record'; var info = document.createElement('div'); var name = document.createElement('strong'); name.textContent = person.name || person.email; var description = document.createElement('p'); description.textContent = person.email + ' · ' + person.role.replace(/_/g, ' ') + ' · ' + (person.enabled ? 'Active' : 'Suspended'); info.append(name, description); var action = document.createElement('button'); action.type = 'button'; action.className = person.enabled ? 'delete' : 'edit'; action.textContent = person.enabled ? 'Suspend' : 'Activate'; action.disabled = person.uid === user.uid; action.addEventListener('click', function () { api('/partner/representatives/' + encodeURIComponent(person.uid) + '/access', { enabled: !person.enabled }, 'POST').then(loadRepresentatives).catch(function (error) { notice(error.message); }); }); row.append(info, action); list.appendChild(row); });
@@ -51,7 +71,7 @@
     $('partner-auth').hidden = !!user;
     $('partner-loading').hidden = !user;
     $('partner-dashboard').hidden = true;
-    $('partner-rep-management').hidden = true;
+    $('partner-view-team').hidden = true;
     $('partner-signout').hidden = !user;
     if (!user) return;
     user.getIdTokenResult(true).then(function (token) {
@@ -79,7 +99,9 @@
         $('partner-loading').hidden = true;
         $('partner-dashboard').hidden = false;
         $('partner-org-name').textContent = context.organisation || '';
-        $('partner-rep-management').hidden = !context.canManageRepresentatives;
+        $('partner-sidebar-org').textContent = context.organisation || '';
+        $('partner-team-nav').hidden = !context.canManageRepresentatives;
+        showPartnerView('overview');
         if (context.canManageRepresentatives) loadRepresentatives();
         return load();
       });
@@ -97,6 +119,7 @@
     auth.sendPasswordResetEmail(email).then(function () { notice('If this address has a VGF account, a password reset email has been sent.', 'success'); }).catch(function () { notice('Could not send a reset email. Check the address or contact the VGF Super Admin.'); });
   });
   $('partner-rep-form').addEventListener('submit', function (event) { event.preventDefault(); api('/partner/representatives', { name: $('partner-rep-name').value, email: $('partner-rep-email').value, role: $('partner-rep-role').value }, 'POST').then(function () { $('partner-rep-form').reset(); notice('Representative invitation sent.', 'success'); loadRepresentatives(); }).catch(function (error) { notice(error.message); }); });
-  $('partner-signout').addEventListener('click', function () { auth.signOut(); }); $('partner-refresh').addEventListener('click', load); auth.onAuthStateChanged(signedIn);
+  $('partner-signout').addEventListener('click', function () { auth.signOut(); }); $('partner-refresh').addEventListener('click', load); $('partner-app-refresh').addEventListener('click', load); auth.onAuthStateChanged(signedIn);
   $('partner-rep-refresh').addEventListener('click', loadRepresentatives);
+  document.querySelectorAll('[data-partner-view]').forEach(function (button) { button.addEventListener('click', function () { showPartnerView(button.getAttribute('data-partner-view')); }); });
 }());
